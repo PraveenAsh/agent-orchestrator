@@ -27,9 +27,7 @@ const SAFE_SESSION_ID = /^[a-zA-Z0-9_-]+$/;
 
 function assertValidSessionId(id: string): void {
   if (!SAFE_SESSION_ID.test(id)) {
-    throw new Error(
-      `Invalid session ID "${id}": must match ${SAFE_SESSION_ID}`,
-    );
+    throw new Error(`Invalid session ID "${id}": must match ${SAFE_SESSION_ID}`);
   }
 }
 
@@ -49,20 +47,12 @@ export function create(): Runtime {
 
       // Build environment flags: -e KEY=VALUE for each env var
       const envArgs: string[] = [];
-      for (const [key, value] of Object.entries(config.environment)) {
+      for (const [key, value] of Object.entries(config.environment ?? {})) {
         envArgs.push("-e", `${key}=${value}`);
       }
 
       // Create tmux session in detached mode
-      await tmux(
-        "new-session",
-        "-d",
-        "-s",
-        sessionName,
-        "-c",
-        config.workspacePath,
-        ...envArgs,
-      );
+      await tmux("new-session", "-d", "-s", sessionName, "-c", config.workspacePath, ...envArgs);
 
       // Send the launch command
       await tmux("send-keys", "-t", sessionName, config.launchCommand, "Enter");
@@ -135,14 +125,7 @@ export function create(): Runtime {
 
     async getOutput(handle: RuntimeHandle, lines = 50): Promise<string> {
       try {
-        return await tmux(
-          "capture-pane",
-          "-t",
-          handle.id,
-          "-p",
-          "-S",
-          `-${lines}`,
-        );
+        return await tmux("capture-pane", "-t", handle.id, "-p", "-S", `-${lines}`);
       } catch {
         return "";
       }
@@ -178,14 +161,7 @@ export function create(): Runtime {
 async function isBusy(sessionName: string): Promise<boolean> {
   try {
     // Single capture-pane call to avoid TOCTOU and redundant subprocess spawns
-    const output = await tmux(
-      "capture-pane",
-      "-t",
-      sessionName,
-      "-p",
-      "-S",
-      "-5",
-    );
+    const output = await tmux("capture-pane", "-t", sessionName, "-p", "-S", "-5");
     const lines = output.split("\n").filter((l) => l.trim() !== "");
     const lastLine = lines[lines.length - 1] ?? "";
 

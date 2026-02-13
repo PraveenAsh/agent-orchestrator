@@ -71,10 +71,10 @@ export function create(config?: Record<string, unknown>): Workspace {
 
       // Create and checkout the feature branch
       try {
-        await git(clonePath, "checkout", "-b", cfg.branch);
+        await git(clonePath, "checkout", "-b", "--", cfg.branch);
       } catch {
         // Branch may exist on remote
-        await git(clonePath, "checkout", cfg.branch);
+        await git(clonePath, "checkout", "--", cfg.branch);
       }
 
       return {
@@ -109,9 +109,8 @@ export function create(config?: Record<string, unknown>): Workspace {
         } catch (err: unknown) {
           // Warn about corrupted clones instead of silently skipping
           const msg = err instanceof Error ? err.message : String(err);
-          console.warn(
-            `[workspace-clone] Skipping "${entry.name}": not a valid git repo (${msg})`,
-          );
+          // eslint-disable-next-line no-console -- expected diagnostic for corrupted clones
+          console.warn(`[workspace-clone] Skipping "${entry.name}": not a valid git repo (${msg})`);
           continue;
         }
 

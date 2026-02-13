@@ -20,9 +20,7 @@ const SAFE_SESSION_ID = /^[a-zA-Z0-9_-]+$/;
 
 function assertValidSessionId(id: string): void {
   if (!SAFE_SESSION_ID.test(id)) {
-    throw new Error(
-      `Invalid session ID "${id}": must match ${SAFE_SESSION_ID}`,
-    );
+    throw new Error(`Invalid session ID "${id}": must match ${SAFE_SESSION_ID}`);
   }
 }
 
@@ -51,6 +49,18 @@ export function create(): Runtime {
         shell: true,
       });
 
+      const handleId = config.sessionId;
+
+      // Wait briefly to catch synchronous spawn errors (bad command, etc.)
+      await new Promise<void>((resolve, reject) => {
+        child.once("error", (err: Error) => {
+          processes.delete(handleId);
+          reject(new Error(`Failed to spawn process for session ${handleId}: ${err.message}`));
+        });
+        // If no error fires synchronously, the spawn succeeded
+        setImmediate(resolve);
+      });
+
       const entry: ProcessEntry = {
         process: child,
         outputBuffer: [],
@@ -65,10 +75,7 @@ export function create(): Runtime {
         }
         // Trim buffer to max size
         if (entry.outputBuffer.length > MAX_OUTPUT_LINES) {
-          entry.outputBuffer.splice(
-            0,
-            entry.outputBuffer.length - MAX_OUTPUT_LINES,
-          );
+          entry.outputBuffer.splice(0, entry.outputBuffer.length - MAX_OUTPUT_LINES);
         }
       };
 
@@ -80,7 +87,11 @@ export function create(): Runtime {
         entry.outputBuffer.push(`[process exited with code ${child.exitCode}]`);
       });
 
-      const handleId = config.sessionId;
+      // Handle late errors (process crashes after spawn)
+      child.on("error", () => {
+        // Already captured via exit handler — prevent unhandled error crash
+      });
+
       processes.set(handleId, entry);
 
       return {
@@ -127,22 +138,32 @@ export function create(): Runtime {
       }
 
       const child = entry.process;
-      if (!child.stdin || !child.stdin.writable) {
+      const stdin = child.stdin;
+      if (!stdin || !stdin.writable) {
         throw new Error(`stdin not writable for session ${handle.id}`);
       }
 
-      // Wrap write in a promise to handle backpressure and errors
+      // Wrap write in a promise with done-flag to prevent double resolve/reject
       await new Promise<void>((resolve, reject) => {
-        const onError = (err: Error) => reject(err);
-        child.stdin!.once("error", onError);
-        const flushed = child.stdin!.write(message + "\n", (err) => {
-          child.stdin!.removeListener("error", onError);
+        let done = false;
+        const finish = (err?: Error | null) => {
+          if (done) return;
+          done = true;
+          cleanup();
           if (err) reject(err);
           else resolve();
-        });
-        if (!flushed) {
-          child.stdin!.once("drain", () => resolve());
-        }
+        };
+        const onError = (err: Error) => finish(err);
+        const onDrain = () => {
+          // Drain means backpressure cleared — still wait for write callback
+        };
+        const cleanup = () => {
+          stdin.removeListener("error", onError);
+          stdin.removeListener("drain", onDrain);
+        };
+        stdin.on("error", onError);
+        stdin.on("drain", onDrain);
+        stdin.write(message + "\n", (err) => finish(err ?? null));
       });
     },
 

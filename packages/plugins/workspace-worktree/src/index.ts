@@ -1,14 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import {
-  existsSync,
-  lstatSync,
-  symlinkSync,
-  rmSync,
-  mkdirSync,
-  readdirSync,
-} from "node:fs";
-import { join, resolve, basename } from "node:path";
+import { existsSync, lstatSync, symlinkSync, rmSync, mkdirSync, readdirSync } from "node:fs";
+import { join, resolve, basename, dirname } from "node:path";
 import { homedir } from "node:os";
 import type {
   PluginModule,
@@ -67,26 +60,18 @@ export function create(config?: Record<string, unknown>): Workspace {
 
       // Create worktree with a new branch
       try {
-        await git(
-          repoPath,
-          "worktree",
-          "add",
-          "-b",
-          cfg.branch,
-          worktreePath,
-          baseRef,
-        );
+        await git(repoPath, "worktree", "add", "-b", cfg.branch, worktreePath, baseRef);
       } catch (err: unknown) {
         // Only retry if the error is "branch already exists"
         const msg = err instanceof Error ? err.message : String(err);
         if (!msg.includes("already exists")) {
-          throw new Error(
-            `Failed to create worktree for branch "${cfg.branch}": ${msg}`,
-          );
+          throw new Error(`Failed to create worktree for branch "${cfg.branch}": ${msg}`, {
+            cause: err,
+          });
         }
         // Branch already exists — create worktree and check it out
         await git(repoPath, "worktree", "add", worktreePath, baseRef);
-        await git(worktreePath, "checkout", cfg.branch);
+        await git(worktreePath, "checkout", "--", cfg.branch);
       }
 
       return {
@@ -117,10 +102,12 @@ export function create(config?: Record<string, unknown>): Workspace {
         const repoPath = resolve(gitCommonDir, "..");
         await git(repoPath, "worktree", "remove", "--force", workspacePath);
 
-        // Clean up the orphaned branch to prevent stale branch accumulation
-        if (branch) {
+        // Clean up the orphaned branch to prevent stale branch accumulation.
+        // Guard: only delete feature branches (contain "/"), never default branches
+        // like main, master, next, develop.
+        if (branch && branch.includes("/")) {
           try {
-            await git(repoPath, "branch", "-D", branch);
+            await git(repoPath, "branch", "-D", "--", branch);
           } catch {
             // Branch may be checked out elsewhere or already deleted
           }
@@ -210,6 +197,8 @@ export function create(config?: Record<string, unknown>): Workspace {
             // Target doesn't exist — that's fine
           }
 
+          // Ensure parent directory exists for nested symlink targets
+          mkdirSync(dirname(targetPath), { recursive: true });
           symlinkSync(sourcePath, targetPath);
         }
       }
