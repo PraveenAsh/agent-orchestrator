@@ -421,6 +421,17 @@ describe("tracker-linear plugin", () => {
       });
     });
 
+    it("defaults to open state when no state specified", async () => {
+      mockLinearAPI({ issues: { nodes: [] } });
+      await tracker.listIssues!({}, project);
+
+      const writeCall = requestMock.mock.results[0].value.write.mock.calls[0][0];
+      const body = JSON.parse(writeCall);
+      expect(body.variables.filter.state).toEqual({
+        type: { nin: ["completed", "canceled"] },
+      });
+    });
+
     it("passes assignee filter", async () => {
       mockLinearAPI({ issues: { nodes: [] } });
       await tracker.listIssues!({ assignee: "Alice" }, project);

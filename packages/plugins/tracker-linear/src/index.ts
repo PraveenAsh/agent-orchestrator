@@ -282,10 +282,11 @@ function createLinearTracker(): Tracker {
       const filter: Record<string, unknown> = {};
       const variables: Record<string, unknown> = {};
 
-      if (filters.state === "open") {
-        filter["state"] = { type: { nin: ["completed", "canceled"] } };
-      } else if (filters.state === "closed") {
+      if (filters.state === "closed") {
         filter["state"] = { type: { in: ["completed", "canceled"] } };
+      } else if (filters.state !== "all") {
+        // Default to open (exclude completed/canceled) to match tracker-github
+        filter["state"] = { type: { nin: ["completed", "canceled"] } };
       }
 
       if (filters.assignee) {
