@@ -195,6 +195,10 @@ describe("notifier-desktop", () => {
 
       const args = mockExecFile.mock.calls[0][1] as string[];
       expect(args).toContain("--urgency=critical");
+      // Options must come before title/message for notify-send
+      const urgencyIdx = args.indexOf("--urgency=critical");
+      const titleIdx = args.findIndex((a: string) => a.includes("URGENT"));
+      expect(urgencyIdx).toBeLessThan(titleIdx);
     });
 
     it("does not include --urgency=critical for info on Linux", async () => {

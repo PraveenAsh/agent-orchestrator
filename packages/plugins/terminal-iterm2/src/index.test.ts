@@ -144,20 +144,21 @@ describe("terminal-iterm2", () => {
   });
 
   describe("AppleScript commands", () => {
-    it("findAndSelectExistingTab checks profile name and selects", async () => {
+    it("findAndSelectExistingTab checks session name and selects", async () => {
       simulateOsascript("NOT_FOUND\n");
       const terminal = create();
       await terminal.openSession(makeSession({ id: "my-session" }));
 
       const findScript = mockExecFile.mock.calls[0][1][1] as string;
       expect(findScript).toContain('tell application "iTerm2"');
-      expect(findScript).toContain("profile name of aSession");
+      expect(findScript).toContain("name of aSession");
+      expect(findScript).not.toContain("profile name of aSession");
       expect(findScript).toContain('"my-session"');
       expect(findScript).toContain("select aWindow");
       expect(findScript).toContain("select aTab");
     });
 
-    it("openNewTab creates tab and attaches to tmux", async () => {
+    it("openNewTab creates tab and attaches to tmux with shell-safe quoting", async () => {
       simulateOsascript("NOT_FOUND\n");
       const terminal = create();
       await terminal.openSession(makeSession({ id: "app-7" }));
@@ -165,7 +166,17 @@ describe("terminal-iterm2", () => {
       const openScript = mockExecFile.mock.calls[1][1][1] as string;
       expect(openScript).toContain("create tab with default profile");
       expect(openScript).toContain('set name to "app-7"');
-      expect(openScript).toContain("tmux attach -t app-7");
+      expect(openScript).toContain("tmux attach -t 'app-7'");
+    });
+
+    it("shell-escapes session names with single quotes in tmux command", async () => {
+      simulateOsascript("NOT_FOUND\n");
+      const terminal = create();
+      await terminal.openSession(makeSession({ id: "it's-a-test" }));
+
+      const openScript = mockExecFile.mock.calls[1][1][1] as string;
+      // Single quotes in the session name should be escaped for shell safety
+      expect(openScript).toContain("tmux attach -t 'it'\\''s-a-test'");
     });
 
     it("always calls osascript as the command", async () => {
@@ -257,6 +268,9 @@ describe("terminal-iterm2", () => {
       const script = mockExecFile.mock.calls[0][1][1] as string;
       expect(script).not.toContain("select aWindow");
       expect(script).not.toContain("select aTab");
+      // Uses session name, not profile name
+      expect(script).toContain("name of aSession");
+      expect(script).not.toContain("profile name");
     });
   });
 });

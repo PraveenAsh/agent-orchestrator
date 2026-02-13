@@ -74,10 +74,11 @@ function sendNotification(
         else resolve();
       });
     } else if (os === "linux") {
-      const args = [title, message];
+      const args: string[] = [];
       if (sound) {
         args.push("--urgency=critical");
       }
+      args.push(title, message);
       execFile("notify-send", args, (err) => {
         if (err) reject(err);
         else resolve();

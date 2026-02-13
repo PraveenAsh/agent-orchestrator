@@ -94,7 +94,7 @@ function buildBlocks(
         return {
           type: "button",
           text: { type: "plain_text", text: action.label, emoji: true },
-          action_id: `ao_${action.label.toLowerCase().replace(/\s+/g, "_")}`,
+          action_id: `ao_${action.label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}`,
           value: action.callbackEndpoint,
         };
       });

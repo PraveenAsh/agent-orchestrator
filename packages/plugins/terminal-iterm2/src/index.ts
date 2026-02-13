@@ -33,7 +33,15 @@ function runAppleScript(script: string): Promise<string> {
 }
 
 /**
- * Check if an iTerm2 tab already exists for this session by matching profile name.
+ * Escape a string for safe interpolation inside a shell single-quoted context.
+ * Replaces ' with '\'' (end quote, escaped quote, start quote).
+ */
+function shellEscape(s: string): string {
+  return s.replace(/'/g, "'\\''");
+}
+
+/**
+ * Check if an iTerm2 tab already exists for this session by matching session name.
  * Returns true if found (and selects it), false otherwise.
  */
 async function findAndSelectExistingTab(sessionName: string): Promise<boolean> {
@@ -44,7 +52,7 @@ tell application "iTerm2"
         repeat with aTab in tabs of aWindow
             repeat with aSession in sessions of aTab
                 try
-                    if profile name of aSession is equal to "${safe}" then
+                    if name of aSession is equal to "${safe}" then
                         select aWindow
                         select aTab
                         return "FOUND"
@@ -72,7 +80,7 @@ tell application "iTerm2"
         repeat with aTab in tabs of aWindow
             repeat with aSession in sessions of aTab
                 try
-                    if profile name of aSession is equal to "${safe}" then
+                    if name of aSession is equal to "${safe}" then
                         return "FOUND"
                     end if
                 end try
@@ -91,6 +99,7 @@ end tell`;
  */
 async function openNewTab(sessionName: string): Promise<void> {
   const safe = escapeAppleScript(sessionName);
+  const shellSafe = shellEscape(sessionName);
   const script = `
 tell application "iTerm2"
     activate
@@ -98,7 +107,7 @@ tell application "iTerm2"
         create tab with default profile
         tell current session
             set name to "${safe}"
-            write text "printf '\\\\033]0;${safe}\\\\007' && tmux attach -t ${safe}"
+            write text "printf '\\\\033]0;${safe}\\\\007' && tmux attach -t '${shellSafe}'"
         end tell
     end tell
 end tell`;
