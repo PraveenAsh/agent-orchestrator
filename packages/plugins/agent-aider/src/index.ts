@@ -92,16 +92,18 @@ function createAiderAgent(): Agent {
           if (!tty) return false;
 
           const ttyShort = tty.replace(/^\/dev\//, "");
-          const { stdout: psOut } = await execFileAsync("ps", [
-            "-eo",
-            "pid,tty,comm",
-          ]);
+          // Use `args` instead of `comm` so we match the CLI name even when
+          // running via a wrapper (e.g. python, pipx).
+          const { stdout: psOut } = await execFileAsync("ps", ["-eo", "pid,tty,args"]);
           for (const line of psOut.split("\n")) {
-            const parts = line.trim().split(/\s+/);
+            const cols = line.trimStart().split(/\s+/);
+            if (cols.length < 3 || cols[1] !== ttyShort) continue;
+            const args = cols.slice(2).join(" ");
             if (
-              parts.length >= 3 &&
-              parts[1] === ttyShort &&
-              parts[2] === "aider"
+              args === "aider" ||
+              args.startsWith("aider ") ||
+              args.includes("/aider ") ||
+              args.includes("/aider")
             ) {
               return true;
             }
@@ -109,8 +111,9 @@ function createAiderAgent(): Agent {
           return false;
         }
 
-        const pid = handle.data["pid"] as number | undefined;
-        if (pid) {
+        const rawPid = handle.data["pid"];
+        const pid = typeof rawPid === "number" ? rawPid : Number(rawPid);
+        if (Number.isFinite(pid) && pid > 0) {
           try {
             process.kill(pid, 0);
             return true;

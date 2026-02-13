@@ -15,8 +15,7 @@ vi.mock("node:child_process", () => {
   return { execFile: fn };
 });
 
-import { create, manifest } from "./index.js";
-import defaultExport from "./index.js";
+import { create, manifest, default as defaultExport } from "./index.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -45,7 +44,7 @@ function makeTmuxHandle(id = "test-session"): RuntimeHandle {
 }
 
 function makeProcessHandle(pid?: number): RuntimeHandle {
-  return { id: "proc-1", runtimeName: "process", data: pid != null ? { pid } : {} };
+  return { id: "proc-1", runtimeName: "process", data: pid !== undefined ? { pid } : {} };
 }
 
 function makeLaunchConfig(overrides: Partial<AgentLaunchConfig> = {}): AgentLaunchConfig {
@@ -63,20 +62,17 @@ function makeLaunchConfig(overrides: Partial<AgentLaunchConfig> = {}): AgentLaun
 }
 
 function mockTmuxWithProcess(processName: string, found = true) {
-  mockExecFileAsync.mockImplementation(
-    (cmd: string) => {
-      if (cmd === "tmux")
-        return Promise.resolve({ stdout: "/dev/ttys005\n", stderr: "" });
-      if (cmd === "ps") {
-        const line = found ? `  444 ttys005  ${processName}` : "  444 ttys005  zsh";
-        return Promise.resolve({
-          stdout: `  PID TT       COMM\n${line}\n`,
-          stderr: "",
-        });
-      }
-      return Promise.reject(new Error("unexpected"));
-    },
-  );
+  mockExecFileAsync.mockImplementation((cmd: string) => {
+    if (cmd === "tmux") return Promise.resolve({ stdout: "/dev/ttys005\n", stderr: "" });
+    if (cmd === "ps") {
+      const line = found ? `  444 ttys005  ${processName}` : "  444 ttys005  zsh";
+      return Promise.resolve({
+        stdout: `  PID TT       ARGS\n${line}\n`,
+        stderr: "",
+      });
+    }
+    return Promise.reject(new Error("unexpected"));
+  });
 }
 
 beforeEach(() => {

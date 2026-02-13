@@ -48,9 +48,7 @@ function toClaudeProjectPath(workspacePath: string): string {
 }
 
 /** Find the most recently modified .jsonl session file in a directory */
-async function findLatestSessionFile(
-  projectDir: string,
-): Promise<string | null> {
+async function findLatestSessionFile(projectDir: string): Promise<string | null> {
   let entries: string[];
   try {
     entries = await readdir(projectDir);
@@ -58,9 +56,7 @@ async function findLatestSessionFile(
     return null;
   }
 
-  const jsonlFiles = entries.filter(
-    (f) => f.endsWith(".jsonl") && !f.startsWith("agent-"),
-  );
+  const jsonlFiles = entries.filter((f) => f.endsWith(".jsonl") && !f.startsWith("agent-"));
   if (jsonlFiles.length === 0) return null;
 
   // Sort by mtime descending
@@ -144,7 +140,8 @@ function extractSummary(lines: JsonlLine[]): string | null {
 /** Extract the last message type from JSONL */
 function extractLastMessageType(lines: JsonlLine[]): string | undefined {
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (lines[i]?.type) return lines[i]!.type;
+    const line = lines[i];
+    if (line?.type) return line.type;
   }
   return undefined;
 }
@@ -163,19 +160,21 @@ function extractCost(lines: JsonlLine[]): CostEstimate | undefined {
     } else if (typeof line.estimatedCostUsd === "number") {
       totalCost += line.estimatedCostUsd;
     }
-    // Handle usage objects
+    // Handle token counts — prefer the structured `usage` object when present;
+    // only fall back to flat `inputTokens`/`outputTokens` fields to avoid
+    // double-counting if a line contains both.
     if (line.usage) {
       inputTokens += line.usage.input_tokens ?? 0;
       inputTokens += line.usage.cache_read_input_tokens ?? 0;
       inputTokens += line.usage.cache_creation_input_tokens ?? 0;
       outputTokens += line.usage.output_tokens ?? 0;
-    }
-    // Handle direct token fields
-    if (typeof line.inputTokens === "number") {
-      inputTokens += line.inputTokens;
-    }
-    if (typeof line.outputTokens === "number") {
-      outputTokens += line.outputTokens;
+    } else {
+      if (typeof line.inputTokens === "number") {
+        inputTokens += line.inputTokens;
+      }
+      if (typeof line.outputTokens === "number") {
+        outputTokens += line.outputTokens;
+      }
     }
   }
 
@@ -188,8 +187,7 @@ function extractCost(lines: JsonlLine[]): CostEstimate | undefined {
   // a useful order-of-magnitude signal. TODO: make pricing configurable or
   // infer from model field in JSONL.
   if (totalCost === 0 && (inputTokens > 0 || outputTokens > 0)) {
-    totalCost =
-      (inputTokens / 1_000_000) * 3.0 + (outputTokens / 1_000_000) * 15.0;
+    totalCost = (inputTokens / 1_000_000) * 3.0 + (outputTokens / 1_000_000) * 15.0;
   }
 
   return { inputTokens, outputTokens, estimatedCostUsd: totalCost };
@@ -219,8 +217,7 @@ function shellEscape(arg: string): string {
  * internal UX that may change between versions — listed here as best-effort
  * but the first two are the most reliable.
  */
-const ACTIVE_PATTERNS =
-  /\u23FA|esc to interrupt|Thinking|Pondering|Analyzing/;
+const ACTIVE_PATTERNS = /\u23FA|esc to interrupt|Thinking|Pondering|Analyzing/;
 
 /** Patterns indicating Claude is at the prompt (idle) */
 const IDLE_PATTERNS = /^[❯>]\s*$/m;
@@ -245,9 +242,7 @@ const BLOCKED_PATTERNS =
  * Check if a process named "claude" is running in the given runtime handle's context.
  * Uses ps to find processes by TTY (for tmux) or by PID.
  */
-async function findClaudeProcess(
-  handle: RuntimeHandle,
-): Promise<number | null> {
+async function findClaudeProcess(handle: RuntimeHandle): Promise<number | null> {
   try {
     // For tmux runtime, get the pane TTY and find claude on it
     if (handle.runtimeName === "tmux" && handle.id) {
@@ -262,26 +257,32 @@ async function findClaudeProcess(
       if (!tty) return null;
 
       const ttyShort = tty.replace(/^\/dev\//, "");
-      const { stdout: psOut } = await execFileAsync("ps", [
-        "-eo",
-        "pid,tty,comm",
-      ]);
+      // Use `args` instead of `comm` so we can match the CLI name even when
+      // the process runs via a wrapper (e.g. node, python).  `comm` would
+      // report "node" instead of "claude" in those cases.
+      const { stdout: psOut } = await execFileAsync("ps", ["-eo", "pid,tty,args"]);
       for (const line of psOut.split("\n")) {
-        const parts = line.trim().split(/\s+/);
+        const cols = line.trimStart().split(/\s+/);
+        if (cols.length < 3 || cols[1] !== ttyShort) continue;
+        // cols[2..] is the full command + arguments — check if any token
+        // ends with the target process name (handles /path/to/claude, npx claude, etc.)
+        const args = cols.slice(2).join(" ");
         if (
-          parts.length >= 3 &&
-          parts[1] === ttyShort &&
-          parts[2] === "claude"
+          args === "claude" ||
+          args.startsWith("claude ") ||
+          args.includes("/claude ") ||
+          args.includes("/claude")
         ) {
-          return parseInt(parts[0]!, 10);
+          return parseInt(cols[0] ?? "0", 10);
         }
       }
       return null;
     }
 
     // For process runtime, check if the PID stored in handle data is alive
-    const pid = handle.data["pid"] as number | undefined;
-    if (pid) {
+    const rawPid = handle.data["pid"];
+    const pid = typeof rawPid === "number" ? rawPid : Number(rawPid);
+    if (Number.isFinite(pid) && pid > 0) {
       try {
         process.kill(pid, 0); // Signal 0 = check existence
         return pid;

@@ -4,14 +4,13 @@ import type { Session, RuntimeHandle, AgentLaunchConfig } from "@agent-orchestra
 // ---------------------------------------------------------------------------
 // Hoisted mocks — available inside vi.mock factories
 // ---------------------------------------------------------------------------
-const { mockExecFileAsync, mockReaddir, mockReadFile, mockStat, mockHomedir } =
-  vi.hoisted(() => ({
-    mockExecFileAsync: vi.fn(),
-    mockReaddir: vi.fn(),
-    mockReadFile: vi.fn(),
-    mockStat: vi.fn(),
-    mockHomedir: vi.fn(() => "/mock/home"),
-  }));
+const { mockExecFileAsync, mockReaddir, mockReadFile, mockStat, mockHomedir } = vi.hoisted(() => ({
+  mockExecFileAsync: vi.fn(),
+  mockReaddir: vi.fn(),
+  mockReadFile: vi.fn(),
+  mockStat: vi.fn(),
+  mockHomedir: vi.fn(() => "/mock/home"),
+}));
 
 vi.mock("node:child_process", () => {
   const fn = Object.assign((..._args: unknown[]) => {}, {
@@ -30,8 +29,7 @@ vi.mock("node:os", () => ({
   homedir: mockHomedir,
 }));
 
-import { create, manifest } from "./index.js";
-import defaultExport from "./index.js";
+import { create, manifest, default as defaultExport } from "./index.js";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -60,7 +58,7 @@ function makeTmuxHandle(id = "test-session"): RuntimeHandle {
 }
 
 function makeProcessHandle(pid?: number): RuntimeHandle {
-  return { id: "proc-1", runtimeName: "process", data: pid != null ? { pid } : {} };
+  return { id: "proc-1", runtimeName: "process", data: pid !== undefined ? { pid } : {} };
 }
 
 function makeLaunchConfig(overrides: Partial<AgentLaunchConfig> = {}): AgentLaunchConfig {
@@ -77,46 +75,39 @@ function makeLaunchConfig(overrides: Partial<AgentLaunchConfig> = {}): AgentLaun
   };
 }
 
-function mockTmuxWithProcess(
-  processName = "claude",
-  tty = "/dev/ttys001",
-  pid = 12345,
-) {
-  mockExecFileAsync.mockImplementation(
-    (cmd: string, args: string[]) => {
-      if (cmd === "tmux" && args[0] === "list-panes") {
-        return Promise.resolve({ stdout: `${tty}\n`, stderr: "" });
-      }
-      if (cmd === "ps") {
-        const ttyShort = tty.replace(/^\/dev\//, "");
-        return Promise.resolve({
-          stdout: `  PID TT       COMM\n  ${pid} ${ttyShort}  ${processName}\n`,
-          stderr: "",
-        });
-      }
-      return Promise.reject(new Error(`Unexpected: ${cmd} ${args.join(" ")}`));
-    },
-  );
+function mockTmuxWithProcess(processName = "claude", tty = "/dev/ttys001", pid = 12345) {
+  mockExecFileAsync.mockImplementation((cmd: string, args: string[]) => {
+    if (cmd === "tmux" && args[0] === "list-panes") {
+      return Promise.resolve({ stdout: `${tty}\n`, stderr: "" });
+    }
+    if (cmd === "ps") {
+      const ttyShort = tty.replace(/^\/dev\//, "");
+      // Matches `ps -eo pid,tty,args` output format
+      return Promise.resolve({
+        stdout: `  PID TT       ARGS\n  ${pid} ${ttyShort}  ${processName}\n`,
+        stderr: "",
+      });
+    }
+    return Promise.reject(new Error(`Unexpected: ${cmd} ${args.join(" ")}`));
+  });
 }
 
 function mockTmuxWithActivity(terminalOutput: string, processName = "claude") {
-  mockExecFileAsync.mockImplementation(
-    (cmd: string, args: string[]) => {
-      if (cmd === "tmux" && args[0] === "list-panes") {
-        return Promise.resolve({ stdout: "/dev/ttys001\n", stderr: "" });
-      }
-      if (cmd === "ps") {
-        return Promise.resolve({
-          stdout: `  PID TT       COMM\n  123 ttys001  ${processName}\n`,
-          stderr: "",
-        });
-      }
-      if (cmd === "tmux" && args[0] === "capture-pane") {
-        return Promise.resolve({ stdout: terminalOutput, stderr: "" });
-      }
-      return Promise.reject(new Error(`Unexpected: ${cmd} ${args.join(" ")}`));
-    },
-  );
+  mockExecFileAsync.mockImplementation((cmd: string, args: string[]) => {
+    if (cmd === "tmux" && args[0] === "list-panes") {
+      return Promise.resolve({ stdout: "/dev/ttys001\n", stderr: "" });
+    }
+    if (cmd === "ps") {
+      return Promise.resolve({
+        stdout: `  PID TT       ARGS\n  123 ttys001  ${processName}\n`,
+        stderr: "",
+      });
+    }
+    if (cmd === "tmux" && args[0] === "capture-pane") {
+      return Promise.resolve({ stdout: terminalOutput, stderr: "" });
+    }
+    return Promise.reject(new Error(`Unexpected: ${cmd} ${args.join(" ")}`));
+  });
 }
 
 function mockJsonlFiles(
@@ -189,17 +180,13 @@ describe("getLaunchCommand", () => {
   });
 
   it("escapes dangerous characters in prompt", () => {
-    const cmd = agent.getLaunchCommand(
-      makeLaunchConfig({ prompt: "$(rm -rf /); `evil`; $HOME" }),
-    );
+    const cmd = agent.getLaunchCommand(makeLaunchConfig({ prompt: "$(rm -rf /); `evil`; $HOME" }));
     // Single-quoted strings prevent shell expansion
     expect(cmd).toContain("-p '$(rm -rf /); `evil`; $HOME'");
   });
 
   it("escapes single quotes in prompt using POSIX method", () => {
-    const cmd = agent.getLaunchCommand(
-      makeLaunchConfig({ prompt: "it's a test" }),
-    );
+    const cmd = agent.getLaunchCommand(makeLaunchConfig({ prompt: "it's a test" }));
     expect(cmd).toContain("-p 'it'\\''s a test'");
   });
 
@@ -207,9 +194,7 @@ describe("getLaunchCommand", () => {
     const cmd = agent.getLaunchCommand(
       makeLaunchConfig({ permissions: "skip", model: "opus", prompt: "Hello" }),
     );
-    expect(cmd).toBe(
-      "claude --dangerously-skip-permissions --model 'opus' -p 'Hello'",
-    );
+    expect(cmd).toBe("claude --dangerously-skip-permissions --model 'opus' -p 'Hello'");
   });
 
   it("omits optional flags when not provided", () => {
@@ -260,18 +245,15 @@ describe("isProcessRunning", () => {
   });
 
   it("returns false when no claude on tmux pane TTY", async () => {
-    mockExecFileAsync.mockImplementation(
-      (cmd: string) => {
-        if (cmd === "tmux")
-          return Promise.resolve({ stdout: "/dev/ttys002\n", stderr: "" });
-        if (cmd === "ps")
-          return Promise.resolve({
-            stdout: "  PID TT       COMM\n  999 ttys002  bash\n",
-            stderr: "",
-          });
-        return Promise.reject(new Error("unexpected"));
-      },
-    );
+    mockExecFileAsync.mockImplementation((cmd: string) => {
+      if (cmd === "tmux") return Promise.resolve({ stdout: "/dev/ttys002\n", stderr: "" });
+      if (cmd === "ps")
+        return Promise.resolve({
+          stdout: "  PID TT       ARGS\n  999 ttys002  bash\n",
+          stderr: "",
+        });
+      return Promise.reject(new Error("unexpected"));
+    });
     expect(await agent.isProcessRunning(makeTmuxHandle())).toBe(false);
   });
 
@@ -319,15 +301,11 @@ describe("detectActivity", () => {
   });
 
   it("returns exited when process is not found", async () => {
-    mockExecFileAsync.mockImplementation(
-      (cmd: string) => {
-        if (cmd === "tmux")
-          return Promise.resolve({ stdout: "/dev/ttys001\n", stderr: "" });
-        if (cmd === "ps")
-          return Promise.resolve({ stdout: "  PID TT COMM\n", stderr: "" });
-        return Promise.reject(new Error("unexpected"));
-      },
-    );
+    mockExecFileAsync.mockImplementation((cmd: string) => {
+      if (cmd === "tmux") return Promise.resolve({ stdout: "/dev/ttys001\n", stderr: "" });
+      if (cmd === "ps") return Promise.resolve({ stdout: "  PID TT ARGS\n", stderr: "" });
+      return Promise.reject(new Error("unexpected"));
+    });
     const session = makeSession({ runtimeHandle: makeTmuxHandle() });
     expect(await agent.detectActivity(session)).toBe("exited");
   });
@@ -427,20 +405,18 @@ describe("detectActivity", () => {
   });
 
   it("returns active when capture-pane throws (process is alive)", async () => {
-    mockExecFileAsync.mockImplementation(
-      (cmd: string, args: string[]) => {
-        if (cmd === "tmux" && args[0] === "list-panes")
-          return Promise.resolve({ stdout: "/dev/ttys001\n", stderr: "" });
-        if (cmd === "ps")
-          return Promise.resolve({
-            stdout: "  PID TT COMM\n  123 ttys001  claude\n",
-            stderr: "",
-          });
-        if (cmd === "tmux" && args[0] === "capture-pane")
-          return Promise.reject(new Error("tmux server not found"));
-        return Promise.reject(new Error("unexpected"));
-      },
-    );
+    mockExecFileAsync.mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === "tmux" && args[0] === "list-panes")
+        return Promise.resolve({ stdout: "/dev/ttys001\n", stderr: "" });
+      if (cmd === "ps")
+        return Promise.resolve({
+          stdout: "  PID TT ARGS\n  123 ttys001  claude\n",
+          stderr: "",
+        });
+      if (cmd === "tmux" && args[0] === "capture-pane")
+        return Promise.reject(new Error("tmux server not found"));
+      return Promise.reject(new Error("unexpected"));
+    });
     const session = makeSession({ runtimeHandle: makeTmuxHandle() });
     expect(await agent.detectActivity(session)).toBe("active");
   });
@@ -563,10 +539,7 @@ describe("introspect", () => {
 
   describe("session ID extraction", () => {
     it("extracts session ID from filename", async () => {
-      mockJsonlFiles(
-        '{"type":"user","message":{"content":"hi"}}',
-        ["abc-def-123.jsonl"],
-      );
+      mockJsonlFiles('{"type":"user","message":{"content":"hi"}}', ["abc-def-123.jsonl"]);
       const result = await agent.introspect(makeSession());
       expect(result?.agentSessionId).toBe("abc-def-123");
     });
@@ -634,7 +607,7 @@ describe("introspect", () => {
       mockJsonlFiles(jsonl);
       const result = await agent.introspect(makeSession());
       // Should use costUSD only, not sum both
-      expect(result?.cost?.estimatedCostUsd).toBeCloseTo(0.10);
+      expect(result?.cost?.estimatedCostUsd).toBeCloseTo(0.1);
     });
 
     it("falls back to estimatedCostUsd when costUSD is absent", async () => {
