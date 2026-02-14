@@ -30,6 +30,9 @@ function getOrSpawnTtyd(sessionId: string): TtydInstance {
   // Enable mouse mode so scroll works as scrollback, not input cycling
   spawn("tmux", ["set-option", "-t", sessionId, "mouse", "on"]);
 
+  // Hide the green status bar for cleaner appearance
+  spawn("tmux", ["set-option", "-t", sessionId, "status", "off"]);
+
   const proc = spawn("ttyd", [
     "--writable",
     "--port", String(port),
