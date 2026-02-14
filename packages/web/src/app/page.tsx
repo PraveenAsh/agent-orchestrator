@@ -10,7 +10,10 @@ export default async function Home() {
   try {
     const { config, registry, sessionManager } = await getServices();
     const coreSessions = await sessionManager.list();
-    sessions = coreSessions.map(sessionToDashboard);
+    // Filter out special orchestrator session - it's accessible via dedicated button
+    sessions = coreSessions
+      .filter((s) => s.id !== "orchestrator")
+      .map(sessionToDashboard);
 
     // Enrich issue labels using tracker plugin (synchronous)
     coreSessions.forEach((core, i) => {

@@ -8,10 +8,12 @@ export async function GET() {
     const { config, registry, sessionManager } = await getServices();
     const coreSessions = await sessionManager.list();
 
-    const dashboardSessions = coreSessions.map(sessionToDashboard);
+    // Filter out special orchestrator session - it's not a worker session
+    const workerSessions = coreSessions.filter((s) => s.id !== "orchestrator");
+    const dashboardSessions = workerSessions.map(sessionToDashboard);
 
     // Enrich sessions that have PRs with live SCM data (CI, reviews, mergeability)
-    const enrichPromises = coreSessions.map((core, i) => {
+    const enrichPromises = workerSessions.map((core, i) => {
       if (!core.pr) return Promise.resolve();
       // Try explicit projectId, then match by session prefix, then first project
       let project = config.projects[core.projectId];
