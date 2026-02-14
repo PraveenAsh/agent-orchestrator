@@ -70,6 +70,14 @@ export function create(config?: Record<string, unknown>): Workspace {
         remoteUrl = repoPath;
       }
 
+      // Fail early if destination already exists — avoid deleting a pre-existing
+      // workspace in the error handler below
+      if (existsSync(clonePath)) {
+        throw new Error(
+          `Workspace path "${clonePath}" already exists for session "${cfg.sessionId}" — destroy it before re-creating`,
+        );
+      }
+
       // Clone using --reference for faster clone with shared objects
       try {
         await execFileAsync("git", [
