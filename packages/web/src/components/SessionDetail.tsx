@@ -57,7 +57,7 @@ function humanizeLevel(level: string): string {
     case "respond":
       return "Needs Response";
     case "review":
-      return "Pending Review";
+      return "Needs Investigation";
     case "pending":
       return "Pending";
     case "working":

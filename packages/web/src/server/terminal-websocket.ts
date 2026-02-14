@@ -240,10 +240,9 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    const instance = getOrSpawnTtyd(sessionId);
-
-    // Wait for ttyd to be ready before returning the URL
+    // Spawn ttyd and wait for it to be ready (catch port exhaustion and startup failures)
     try {
+      const instance = getOrSpawnTtyd(sessionId);
       await waitForTtyd(instance.port, sessionId);
 
       // Use the request host to construct the terminal URL (supports remote access)
@@ -257,9 +256,10 @@ const server = createServer(async (req, res) => {
         sessionId,
       }));
     } catch (err) {
-      console.error(`[Terminal] ttyd ${sessionId} failed to become ready:`, err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[Terminal] Failed to start terminal for ${sessionId}:`, errorMsg);
       res.writeHead(503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Terminal server not ready" }));
+      res.end(JSON.stringify({ error: errorMsg }));
     }
     return;
   }
