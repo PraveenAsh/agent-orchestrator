@@ -127,8 +127,10 @@ describe.skipIf(!canRun)("agent-claude-code (integration)", () => {
     expect(exitedRunning).toBe(false);
   });
 
-  it("detectActivity → exited after agent exits", () => {
-    expect(exitedActivity).toBe("exited");
+  it("detectActivity → idle after agent exits", () => {
+    // detectActivity is a pure terminal-text classifier; it returns "idle"
+    // for empty/shell-prompt output. Process exit is detected by isProcessRunning.
+    expect(exitedActivity).toBe("idle");
   });
 
   it("getSessionInfo → returns session data (or null if JSONL path mismatch)", () => {

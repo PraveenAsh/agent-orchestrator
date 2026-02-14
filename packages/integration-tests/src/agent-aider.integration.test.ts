@@ -155,8 +155,10 @@ describe.skipIf(!canRun)("agent-aider (integration)", () => {
     expect(exitedRunning).toBe(false);
   });
 
-  it("detectActivity → exited after agent exits", () => {
-    expect(exitedActivity).toBe("exited");
+  it("detectActivity → idle after agent exits", () => {
+    // detectActivity is a pure terminal-text classifier; it returns "idle"
+    // for empty/shell-prompt output. Process exit is detected by isProcessRunning.
+    expect(exitedActivity).toBe("idle");
   });
 
   it("getSessionInfo → null (not implemented for aider)", () => {
