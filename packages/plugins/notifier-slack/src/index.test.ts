@@ -326,7 +326,7 @@ describe("notifier-slack", () => {
 
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
       const actionsBlock = body.blocks.find((b: Record<string, unknown>) => b.type === "actions");
-      expect(actionsBlock.elements[0].action_id).toBe("ao_kill_session");
+      expect(actionsBlock.elements[0].action_id).toBe("ao_kill_session_0");
       expect(actionsBlock.elements[0].value).toBe("/api/sessions/app-1/kill");
     });
 

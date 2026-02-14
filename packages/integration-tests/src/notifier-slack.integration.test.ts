@@ -177,7 +177,7 @@ describe("notifier-slack integration", () => {
 
       // Callback button
       expect(actionsBlock.elements[1].type).toBe("button");
-      expect(actionsBlock.elements[1].action_id).toBe("ao_kill_session");
+      expect(actionsBlock.elements[1].action_id).toBe("ao_kill_session_1");
       expect(actionsBlock.elements[1].value).toBe("/api/kill/app-1");
     });
 

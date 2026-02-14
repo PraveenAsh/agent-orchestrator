@@ -31,6 +31,8 @@ const APP_TOOL_SLUG: Record<ComposioApp, string> = {
 
 const VALID_APPS = new Set<string>(["slack", "discord", "gmail"]);
 
+const GMAIL_SUBJECT = "Agent Orchestrator Notification";
+
 interface ComposioToolkit {
   executeAction(params: {
     action: string;
@@ -127,7 +129,7 @@ function buildToolArgs(
   // gmail — emailTo is required, validated at config time
   return {
     to: emailTo ?? "",
-    subject: "Agent Orchestrator Notification",
+    subject: GMAIL_SUBJECT,
     body: text,
   };
 }
@@ -256,7 +258,7 @@ export function create(config?: Record<string, unknown>): Notifier {
       const toolSlug = APP_TOOL_SLUG[defaultApp];
 
       const args: Record<string, unknown> = defaultApp === "gmail"
-        ? { to: emailTo ?? "", subject: "Agent Orchestrator", body: message }
+        ? { to: emailTo ?? "", subject: GMAIL_SUBJECT, body: message }
         : defaultApp === "discord"
           ? { content: message, ...(channel ? { channel_id: channel } : {}) }
           : { text: message, ...(channel ? { channel } : {}) };
