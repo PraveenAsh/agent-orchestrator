@@ -45,7 +45,9 @@ export const manifest = {
  * the resulting directory exists.
  */
 function toClaudeProjectPath(workspacePath: string): string {
-  return workspacePath.replace(/^\//, "").replace(/[/.]/g, "-");
+  // Handle Windows drive letters (C:\Users\... → C-Users-...)
+  const normalized = workspacePath.replace(/\\/g, "/");
+  return normalized.replace(/^\//, "").replace(/:/g, "").replace(/[/.]/g, "-");
 }
 
 /** Find the most recently modified .jsonl session file in a directory */
@@ -112,9 +114,9 @@ async function readLastJsonlEntry(
 
     const readSize = Math.min(TAIL_READ_BYTES, size);
     const buffer = Buffer.alloc(readSize);
-    await fh.read(buffer, 0, readSize, size - readSize);
+    const { bytesRead } = await fh.read(buffer, 0, readSize, size - readSize);
 
-    const chunk = buffer.toString("utf-8");
+    const chunk = buffer.toString("utf-8", 0, bytesRead);
     // Walk backwards through lines to find the last valid JSON object with a type
     const lines = chunk.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {

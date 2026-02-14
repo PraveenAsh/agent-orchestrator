@@ -118,6 +118,8 @@ function createOpenCodeAgent(): Agent {
       }
     },
 
+    // NOTE: OpenCode lacks introspection to distinguish "processing" from "idle at prompt".
+    // Falling back to process liveness until richer detection is implemented (see #19).
     async isProcessing(session: Session): Promise<boolean> {
       if (!session.runtimeHandle) return false;
       return this.isProcessRunning(session.runtimeHandle);

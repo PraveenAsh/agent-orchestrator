@@ -28,10 +28,9 @@ const execFileAsync = promisify(execFile);
 // ---------------------------------------------------------------------------
 
 const SESSION_PREFIX = "ao-inttest-aider-";
-const AIDER_BINARY = "/Users/equinox/Library/Python/3.9/bin/aider";
 
 async function findAiderBinary(): Promise<string | null> {
-  for (const bin of ["aider", AIDER_BINARY]) {
+  for (const bin of ["aider"]) {
     try {
       await execFileAsync("which", [bin], { timeout: 5_000 });
       return bin;

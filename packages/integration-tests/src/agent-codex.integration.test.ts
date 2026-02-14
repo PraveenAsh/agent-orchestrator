@@ -28,10 +28,9 @@ const execFileAsync = promisify(execFile);
 // ---------------------------------------------------------------------------
 
 const SESSION_PREFIX = "ao-inttest-codex-";
-const CODEX_BINARY = "/opt/homebrew/bin/codex";
 
 async function findCodexBinary(): Promise<string | null> {
-  for (const bin of ["codex", CODEX_BINARY]) {
+  for (const bin of ["codex"]) {
     try {
       await execFileAsync("which", [bin], { timeout: 5_000 });
       return bin;

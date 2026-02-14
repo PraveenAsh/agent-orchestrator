@@ -28,10 +28,9 @@ const execFileAsync = promisify(execFile);
 // ---------------------------------------------------------------------------
 
 const SESSION_PREFIX = "ao-inttest-claude-";
-const CLAUDE_BINARY = "/Users/equinox/.local/bin/claude";
 
 async function findClaudeBinary(): Promise<string | null> {
-  for (const bin of ["claude", CLAUDE_BINARY]) {
+  for (const bin of ["claude"]) {
     try {
       await execFileAsync("which", [bin], { timeout: 5_000 });
       return bin;

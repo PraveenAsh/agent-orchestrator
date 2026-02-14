@@ -122,6 +122,8 @@ function createAiderAgent(): Agent {
       }
     },
 
+    // NOTE: Aider lacks introspection to distinguish "processing" from "idle at prompt".
+    // Falling back to process liveness until richer detection is implemented (see #18).
     async isProcessing(session: Session): Promise<boolean> {
       if (!session.runtimeHandle) return false;
       return this.isProcessRunning(session.runtimeHandle);
