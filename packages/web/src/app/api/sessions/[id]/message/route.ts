@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServices } from "@/lib/services";
+import type { Runtime } from "@agent-orchestrator/core";
 
 export async function POST(
   request: NextRequest,
@@ -13,33 +14,40 @@ export async function POST(
       return NextResponse.json({ error: "Missing message" }, { status: 400 });
     }
 
-    const { sessionManager } = await getServices();
+    const { sessionManager, config, registry } = await getServices();
     const session = await sessionManager.get(id);
 
     if (!session) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // Send message to the session via tmux
-    // TODO: This should use the Runtime plugin's sendInput method
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const execFileAsync = promisify(execFile);
+    if (!session.runtimeHandle) {
+      return NextResponse.json({ error: "Session has no runtime handle" }, { status: 400 });
+    }
+
+    // Get the runtime plugin for this session's project
+    const project = config.projects[session.projectId];
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    if (!project.runtime) {
+      return NextResponse.json({ error: "Project has no runtime configured" }, { status: 500 });
+    }
+
+    const runtime = registry.get<Runtime>("runtime", project.runtime);
+    if (!runtime) {
+      return NextResponse.json({ error: "Runtime plugin not found" }, { status: 500 });
+    }
 
     try {
-      // First press Escape to ensure we're not in any special mode
-      await execFileAsync("tmux", ["send-keys", "-t", id, "Escape"], { timeout: 5000 });
-
-      // Wait a bit for the escape to process
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Send the message
-      await execFileAsync("tmux", ["send-keys", "-t", id, message, "Enter"], { timeout: 5000 });
-
+      // Use the Runtime plugin's sendMessage method which handles sanitization
+      // and uses the correct runtime handle
+      await runtime.sendMessage(session.runtimeHandle, message);
       return NextResponse.json({ success: true });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error("Failed to send keys to tmux:", errorMsg);
+      console.error("Failed to send message:", errorMsg);
       return NextResponse.json(
         { error: `Failed to send message: ${errorMsg}` },
         { status: 500 },
