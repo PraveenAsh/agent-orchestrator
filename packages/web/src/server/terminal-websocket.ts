@@ -257,7 +257,7 @@ const server = createServer(async (req, res) => {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error(`[Terminal] Failed to start terminal for ${sessionId}:`, errorMsg);
       res.writeHead(503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: errorMsg }));
+      res.end(JSON.stringify({ error: "Failed to start terminal" }));
     }
     return;
   }
