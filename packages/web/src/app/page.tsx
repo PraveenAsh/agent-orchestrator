@@ -10,7 +10,9 @@ export default async function Home() {
   let sessions: DashboardSession[] = [];
   try {
     const { config, registry, sessionManager } = await getServices();
-    const coreSessions = await sessionManager.list();
+    const allSessions = await sessionManager.list();
+    // Filter out orchestrator session — it gets its own button, not a card
+    const coreSessions = allSessions.filter((s) => s.id !== "orchestrator");
     sessions = coreSessions.map(sessionToDashboard);
 
     // Enrich issue labels using tracker plugin (synchronous)
