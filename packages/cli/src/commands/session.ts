@@ -4,6 +4,7 @@ import { loadConfig, type OrchestratorConfig } from "@agent-orchestrator/core";
 import { tmux, git, gh, getTmuxSessions, getTmuxActivity } from "../lib/shell.js";
 import { getSessionDir, readMetadata, archiveMetadata } from "../lib/metadata.js";
 import { formatAge } from "../lib/format.js";
+import { findProjectForSession } from "../lib/session-utils.js";
 
 async function killSession(
   config: OrchestratorConfig,
@@ -37,16 +38,6 @@ async function killSession(
   // Archive metadata
   archiveMetadata(sessionDir, sessionName);
   console.log(chalk.green(`  Archived metadata`));
-}
-
-function findProjectForSession(config: OrchestratorConfig, sessionName: string): string | null {
-  for (const [id, project] of Object.entries(config.projects)) {
-    const prefix = project.sessionPrefix || id;
-    if (sessionName.startsWith(`${prefix}-`)) {
-      return id;
-    }
-  }
-  return null;
 }
 
 export function registerSession(program: Command): void {

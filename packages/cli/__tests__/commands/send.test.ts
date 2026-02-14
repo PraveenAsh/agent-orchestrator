@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { mockTmux, mockExec } = vi.hoisted(() => ({
+const { mockTmux, mockExec, mockDetectActivity } = vi.hoisted(() => ({
   mockTmux: vi.fn(),
   mockExec: vi.fn(),
+  mockDetectActivity: vi.fn(),
 }));
 
 vi.mock("../../src/lib/shell.js", () => ({
@@ -11,6 +12,29 @@ vi.mock("../../src/lib/shell.js", () => ({
   execSilent: vi.fn(),
   git: vi.fn(),
   gh: vi.fn(),
+}));
+
+vi.mock("../../src/lib/plugins.js", () => ({
+  getAgent: () => ({
+    name: "claude-code",
+    processName: "claude",
+    detectActivity: mockDetectActivity,
+  }),
+  getAgentByName: () => ({
+    name: "claude-code",
+    processName: "claude",
+    detectActivity: mockDetectActivity,
+  }),
+}));
+
+vi.mock("../../src/lib/session-utils.js", () => ({
+  findProjectForSession: () => null,
+}));
+
+vi.mock("@agent-orchestrator/core", () => ({
+  loadConfig: () => {
+    throw new Error("no config");
+  },
 }));
 
 import { Command } from "commander";
@@ -33,6 +57,7 @@ beforeEach(() => {
   });
   mockTmux.mockReset();
   mockExec.mockReset();
+  mockDetectActivity.mockReset();
   mockExec.mockResolvedValue({ stdout: "", stderr: "" });
 });
 
@@ -57,36 +82,23 @@ describe("send command", () => {
   });
 
   describe("busy detection", () => {
-    it("detects idle session (prompt character)", async () => {
+    it("detects idle session via agent plugin", async () => {
       // has-session succeeds
       mockTmux.mockImplementation(async (...args: string[]) => {
         if (args[0] === "has-session") return "";
         if (args[0] === "capture-pane") {
-          // Check which -S value to determine context
           const sIdx = args.indexOf("-S");
-          if (sIdx >= 0 && args[sIdx + 1] === "-5") {
-            return "some output\n❯ ";
-          }
+          if (sIdx >= 0 && args[sIdx + 1] === "-5") return "some output\n❯ ";
+          if (sIdx >= 0 && args[sIdx + 1] === "-10") return "esc to interrupt\nThinking";
           return "";
         }
         return "";
       });
 
-      // isProcessing should detect processing after send
-      mockTmux.mockImplementation(async (...args: string[]) => {
-        if (args[0] === "has-session") return "";
-        if (args[0] === "capture-pane") {
-          const sIdx = args.indexOf("-S");
-          if (sIdx >= 0 && args[sIdx + 1] === "-5") {
-            return "some output\n❯ ";
-          }
-          if (sIdx >= 0 && args[sIdx + 1] === "-10") {
-            return "Thinking about your request\nesc to interrupt";
-          }
-          return "";
-        }
-        return "";
-      });
+      // Agent detects idle for wait-for-idle, then active for verification
+      mockDetectActivity
+        .mockReturnValueOnce("idle") // wait-for-idle check
+        .mockReturnValueOnce("active"); // verification check
 
       await program.parseAsync(["node", "test", "send", "my-session", "hello", "world"]);
 
@@ -105,33 +117,18 @@ describe("send command", () => {
       );
     });
 
-    it("detects busy session (esc to interrupt)", async () => {
-      let callCount = 0;
+    it("detects busy session and waits via agent plugin", async () => {
       mockTmux.mockImplementation(async (...args: string[]) => {
         if (args[0] === "has-session") return "";
-        if (args[0] === "capture-pane") {
-          callCount++;
-          const sIdx = args.indexOf("-S");
-          // First few calls: session is busy
-          if (callCount <= 2) {
-            if (sIdx >= 0 && args[sIdx + 1] === "-5") {
-              return "Working on something...";
-            }
-            if (sIdx >= 0 && args[sIdx + 1] === "-3") {
-              return "esc to interrupt";
-            }
-          }
-          // Then idle
-          if (sIdx >= 0 && args[sIdx + 1] === "-5") {
-            return "Done\n❯ ";
-          }
-          if (sIdx >= 0 && args[sIdx + 1] === "-10") {
-            return "Thinking\nesc to interrupt";
-          }
-          return "";
-        }
+        if (args[0] === "capture-pane") return "some output";
         return "";
       });
+
+      // First call: active (busy), second call: idle, third call: active (verification)
+      mockDetectActivity
+        .mockReturnValueOnce("active") // busy
+        .mockReturnValueOnce("idle") // now idle
+        .mockReturnValueOnce("active"); // verification: processing
 
       await program.parseAsync(["node", "test", "send", "my-session", "fix", "the", "bug"]);
 
@@ -148,15 +145,12 @@ describe("send command", () => {
     it("skips busy detection with --no-wait", async () => {
       mockTmux.mockImplementation(async (...args: string[]) => {
         if (args[0] === "has-session") return "";
-        if (args[0] === "capture-pane") {
-          const sIdx = args.indexOf("-S");
-          if (sIdx >= 0 && args[sIdx + 1] === "-10") {
-            return "Thinking\nesc to interrupt";
-          }
-          return "busy\nesc to interrupt";
-        }
+        if (args[0] === "capture-pane") return "Thinking\nesc to interrupt";
         return "";
       });
+
+      // Agent detects active for verification
+      mockDetectActivity.mockReturnValue("active");
 
       await program.parseAsync(["node", "test", "send", "--no-wait", "my-session", "urgent"]);
 
@@ -169,16 +163,16 @@ describe("send command", () => {
         if (args[0] === "has-session") return "";
         if (args[0] === "capture-pane") {
           const sIdx = args.indexOf("-S");
-          if (sIdx >= 0 && args[sIdx + 1] === "-5") {
-            return "Output\n❯ \nPress up to edit queued messages";
-          }
-          if (sIdx >= 0 && args[sIdx + 1] === "-10") {
-            return "";
-          }
+          if (sIdx >= 0 && args[sIdx + 1] === "-5") return "Output\n❯ ";
+          if (sIdx >= 0 && args[sIdx + 1] === "-10")
+            return "Output\nPress up to edit queued messages";
           return "";
         }
         return "";
       });
+
+      // Agent detects idle for wait-for-idle, then idle for verification (not processing)
+      mockDetectActivity.mockReturnValue("idle");
 
       await program.parseAsync(["node", "test", "send", "my-session", "hello"]);
 
@@ -190,14 +184,13 @@ describe("send command", () => {
     it("uses load-buffer for long messages", async () => {
       mockTmux.mockImplementation(async (...args: string[]) => {
         if (args[0] === "has-session") return "";
-        if (args[0] === "capture-pane") {
-          const sIdx = args.indexOf("-S");
-          if (sIdx >= 0 && args[sIdx + 1] === "-5") return "❯ ";
-          if (sIdx >= 0 && args[sIdx + 1] === "-10") return "esc to interrupt";
-          return "";
-        }
+        if (args[0] === "capture-pane") return "❯ ";
         return "";
       });
+
+      mockDetectActivity
+        .mockReturnValueOnce("idle") // wait-for-idle
+        .mockReturnValueOnce("active"); // verification
 
       const longMsg = "x".repeat(250);
       await program.parseAsync(["node", "test", "send", "my-session", longMsg]);
@@ -210,14 +203,13 @@ describe("send command", () => {
     it("uses send-keys for short messages", async () => {
       mockTmux.mockImplementation(async (...args: string[]) => {
         if (args[0] === "has-session") return "";
-        if (args[0] === "capture-pane") {
-          const sIdx = args.indexOf("-S");
-          if (sIdx >= 0 && args[sIdx + 1] === "-5") return "❯ ";
-          if (sIdx >= 0 && args[sIdx + 1] === "-10") return "esc to interrupt";
-          return "";
-        }
+        if (args[0] === "capture-pane") return "❯ ";
         return "";
       });
+
+      mockDetectActivity
+        .mockReturnValueOnce("idle") // wait-for-idle
+        .mockReturnValueOnce("active"); // verification
 
       await program.parseAsync(["node", "test", "send", "my-session", "short", "msg"]);
 
@@ -227,14 +219,13 @@ describe("send command", () => {
     it("clears partial input before sending", async () => {
       mockTmux.mockImplementation(async (...args: string[]) => {
         if (args[0] === "has-session") return "";
-        if (args[0] === "capture-pane") {
-          const sIdx = args.indexOf("-S");
-          if (sIdx >= 0 && args[sIdx + 1] === "-5") return "❯ ";
-          if (sIdx >= 0 && args[sIdx + 1] === "-10") return "esc to interrupt";
-          return "";
-        }
+        if (args[0] === "capture-pane") return "❯ ";
         return "";
       });
+
+      mockDetectActivity
+        .mockReturnValueOnce("idle") // wait-for-idle
+        .mockReturnValueOnce("active"); // verification
 
       await program.parseAsync(["node", "test", "send", "my-session", "hello"]);
 

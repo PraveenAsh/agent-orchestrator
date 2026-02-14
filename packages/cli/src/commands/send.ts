@@ -3,48 +3,50 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import chalk from "chalk";
 import type { Command } from "commander";
+import { type Agent, loadConfig } from "@agent-orchestrator/core";
 import { exec, tmux } from "../lib/shell.js";
+import { getAgent, getAgentByName } from "../lib/plugins.js";
+import { findProjectForSession } from "../lib/session-utils.js";
 
 async function sessionExists(session: string): Promise<boolean> {
   const result = await tmux("has-session", "-t", session);
   return result !== null;
 }
 
-async function isBusy(session: string): Promise<boolean> {
-  const output = await tmux("capture-pane", "-t", session, "-p", "-S", "-5");
-  if (!output) return false;
-
-  const lines = output.split("\n").filter(Boolean);
-  const lastLine = lines[lines.length - 1] || "";
-
-  // Idle indicators
-  if (/[❯$⏵]|bypass permissions/.test(lastLine)) {
-    return false;
-  }
-
-  // Active indicators
-  const recentOutput = await tmux("capture-pane", "-t", session, "-p", "-S", "-3");
-  if (recentOutput && recentOutput.includes("esc to interrupt")) {
-    return true;
-  }
-
-  return false;
+async function captureOutput(session: string, lines: number): Promise<string> {
+  const output = await tmux("capture-pane", "-t", session, "-p", "-S", String(-lines));
+  return output || "";
 }
 
-async function isProcessing(session: string): Promise<boolean> {
-  const output = await tmux("capture-pane", "-t", session, "-p", "-S", "-10");
-  if (!output) return false;
-  return /Thinking|Running|esc to interrupt|⏺/.test(output);
+function isBusy(agent: Agent, terminalOutput: string): boolean {
+  const state = agent.detectActivity(terminalOutput);
+  return state === "active";
 }
 
-async function hasQueuedMessage(session: string): Promise<boolean> {
-  const output = await tmux("capture-pane", "-t", session, "-p", "-S", "-5");
-  if (!output) return false;
-  return output.includes("Press up to edit queued messages");
+function isProcessing(agent: Agent, terminalOutput: string): boolean {
+  const state = agent.detectActivity(terminalOutput);
+  return state === "active";
+}
+
+function hasQueuedMessage(terminalOutput: string): boolean {
+  return terminalOutput.includes("Press up to edit queued messages");
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveAgent(sessionName: string): Agent {
+  try {
+    const config = loadConfig();
+    const projectId = findProjectForSession(config, sessionName);
+    if (projectId) {
+      return getAgent(config, projectId);
+    }
+  } catch {
+    // No config or project — fall back to default
+  }
+  return getAgentByName("claude-code");
 }
 
 export function registerSend(program: Command): void {
@@ -67,6 +69,8 @@ export function registerSend(program: Command): void {
           process.exit(1);
         }
 
+        const agent = resolveAgent(session);
+
         const parsedTimeout = parseInt(opts.timeout || "600", 10);
         const timeoutMs = (isNaN(parsedTimeout) || parsedTimeout <= 0 ? 600 : parsedTimeout) * 1000;
 
@@ -74,7 +78,7 @@ export function registerSend(program: Command): void {
         if (opts.wait !== false) {
           const start = Date.now();
           let warned = false;
-          while (await isBusy(session)) {
+          while (isBusy(agent, await captureOutput(session, 5))) {
             if (!warned) {
               console.log(chalk.dim(`Waiting for ${session} to become idle...`));
               warned = true;
@@ -136,11 +140,12 @@ export function registerSend(program: Command): void {
         // Verify delivery with retries
         for (let attempt = 1; attempt <= 3; attempt++) {
           await sleep(2000);
-          if (await isProcessing(session)) {
+          const output = await captureOutput(session, 10);
+          if (isProcessing(agent, output)) {
             console.log(chalk.green("Message sent and processing"));
             return;
           }
-          if (await hasQueuedMessage(session)) {
+          if (hasQueuedMessage(output)) {
             console.log(chalk.green("Message queued (session finishing previous task)"));
             return;
           }

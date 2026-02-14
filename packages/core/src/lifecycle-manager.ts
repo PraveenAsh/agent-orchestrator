@@ -190,10 +190,14 @@ export function createLifecycleManager(deps: LifecycleManagerDeps): LifecycleMan
       }
     }
 
-    // 2. Check agent activity
-    if (agent) {
+    // 2. Check agent activity via terminal output
+    if (agent && session.runtimeHandle) {
       try {
-        const activity = await agent.detectActivity(session);
+        const runtime = registry.get<Runtime>("runtime", project.runtime ?? config.defaults.runtime);
+        const terminalOutput = runtime
+          ? await runtime.getOutput(session.runtimeHandle, 10).catch(() => "")
+          : "";
+        const activity = agent.detectActivity(terminalOutput);
         if (activity === "exited") return "killed";
         if (activity === "blocked") return "stuck";
         if (activity === "waiting_input") return "needs_input";

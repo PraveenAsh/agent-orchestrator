@@ -1,11 +1,16 @@
-import { readFileSync, readdirSync, existsSync, statSync, openSync, readSync, closeSync } from "node:fs";
-import { join } from "node:path";
 import chalk from "chalk";
 import type { Command } from "commander";
-import { loadConfig, type OrchestratorConfig } from "@agent-orchestrator/core";
-import { exec, git, getTmuxSessions, getTmuxActivity } from "../lib/shell.js";
+import {
+  type Agent,
+  type OrchestratorConfig,
+  type Session,
+  type RuntimeHandle,
+  loadConfig,
+} from "@agent-orchestrator/core";
+import { git, getTmuxSessions, getTmuxActivity } from "../lib/shell.js";
 import { getSessionDir, readMetadata } from "../lib/metadata.js";
 import { banner, header, formatAge, statusColor } from "../lib/format.js";
+import { getAgent, getAgentByName } from "../lib/plugins.js";
 
 interface SessionInfo {
   name: string;
@@ -20,95 +25,37 @@ interface SessionInfo {
 }
 
 /**
- * Extracts Claude's auto-generated summary from its internal session data.
- * Maps: tmux session → TTY → Claude PID → CWD → .claude/projects/ → JSONL summary
+ * Build a minimal Session object for agent.introspect().
+ * Only runtimeHandle and workspacePath are needed by the introspection logic.
  */
-async function getClaudeSessionInfo(
-  sessionName: string,
-): Promise<{ summary: string | null; sessionId: string | null }> {
-  try {
-    // Get the TTY for this tmux session's pane
-    const ttyOutput = await exec("tmux", [
-      "display-message",
-      "-t",
-      sessionName,
-      "-p",
-      "#{pane_tty}",
-    ]);
-    const tty = ttyOutput.stdout.trim();
-    if (!tty) return { summary: null, sessionId: null };
-
-    // Find Claude PID running on that TTY (column-based match to avoid pts/1 matching pts/10)
-    const psOutput = await exec("ps", ["-eo", "pid,tty,comm"]);
-    const ttyShort = tty.replace("/dev/", "");
-    const pidLine = psOutput.stdout.split("\n").find((line) => {
-      const cols = line.trim().split(/\s+/);
-      return cols.length >= 3 && cols[1] === ttyShort && cols[2].includes("claude");
-    });
-    const pid = pidLine?.trim().split(/\s+/)[0];
-    if (!pid) return { summary: null, sessionId: null };
-
-    // Get Claude's working directory
-    const cwdOutput = await exec("lsof", ["-p", pid, "-d", "cwd", "-Fn"]);
-    const cwdMatch = cwdOutput.stdout.match(/n(.+)/);
-    const cwd = cwdMatch?.[1];
-    if (!cwd) return { summary: null, sessionId: null };
-
-    // Encode path for Claude's project directory naming
-    const encodedPath = cwd.replace(/\//g, "-").replace(/^-/, "");
-    const claudeProjectDir = join(process.env.HOME || "~", ".claude", "projects", encodedPath);
-
-    if (!existsSync(claudeProjectDir)) return { summary: null, sessionId: null };
-
-    // Find the most recent session file
-    const files = readdirSync(claudeProjectDir)
-      .filter((f) => f.endsWith(".jsonl"))
-      .sort()
-      .reverse();
-
-    if (files.length === 0) return { summary: null, sessionId: null };
-
-    const sessionFile = join(claudeProjectDir, files[0]);
-    const sessionId = files[0].replace(".jsonl", "").slice(0, 8);
-
-    // Read only the tail of the file (last ~8KB) to avoid loading large JSONL files
-    const fileSize = statSync(sessionFile).size;
-    const tailSize = Math.min(fileSize, 8192);
-    let tail: string;
-    if (tailSize === fileSize) {
-      tail = readFileSync(sessionFile, "utf-8");
-    } else {
-      const buf = Buffer.alloc(tailSize);
-      const fd = openSync(sessionFile, "r");
-      try {
-        readSync(fd, buf, 0, tailSize, fileSize - tailSize);
-      } finally {
-        closeSync(fd);
-      }
-      tail = buf.toString("utf-8");
-    }
-    const lines = tail.trim().split("\n").slice(-20);
-    let summary: string | null = null;
-
-    for (const line of lines.reverse()) {
-      try {
-        const entry = JSON.parse(line);
-        if (entry.type === "summary" || entry.summary) {
-          summary = entry.summary || entry.message;
-          break;
-        }
-      } catch {
-        // Skip non-JSON lines
-      }
-    }
-
-    return { summary, sessionId };
-  } catch {
-    return { summary: null, sessionId: null };
-  }
+function buildSessionForIntrospect(sessionName: string, workspacePath?: string): Session {
+  const handle: RuntimeHandle = {
+    id: sessionName,
+    runtimeName: "tmux",
+    data: {},
+  };
+  return {
+    id: sessionName,
+    projectId: "",
+    status: "working",
+    activity: "idle",
+    branch: null,
+    issueId: null,
+    pr: null,
+    workspacePath: workspacePath || null,
+    runtimeHandle: handle,
+    agentInfo: null,
+    createdAt: new Date(),
+    lastActivityAt: new Date(),
+    metadata: {},
+  };
 }
 
-async function gatherSessionInfo(sessionName: string, sessionDir: string): Promise<SessionInfo> {
+async function gatherSessionInfo(
+  sessionName: string,
+  sessionDir: string,
+  agent: Agent,
+): Promise<SessionInfo> {
   const metaFile = `${sessionDir}/${sessionName}`;
   const meta = readMetadata(metaFile);
 
@@ -130,15 +77,22 @@ async function gatherSessionInfo(sessionName: string, sessionDir: string): Promi
   const activityTs = await getTmuxActivity(sessionName);
   const lastActivity = activityTs ? formatAge(activityTs) : "-";
 
-  // Get Claude's auto-generated summary
-  const claudeInfo = await getClaudeSessionInfo(sessionName);
+  // Get agent's auto-generated summary via introspection
+  let claudeSummary: string | null = null;
+  try {
+    const session = buildSessionForIntrospect(sessionName, worktree);
+    const introspection = await agent.introspect(session);
+    claudeSummary = introspection?.summary ?? null;
+  } catch {
+    // Introspection failed — not critical
+  }
 
   return {
     name: sessionName,
     branch,
     status,
     summary,
-    claudeSummary: claudeInfo.summary,
+    claudeSummary,
     pr,
     issue,
     lastActivity,
@@ -178,7 +132,6 @@ export function registerStatus(program: Command): void {
       } catch {
         console.log(chalk.yellow("No config found. Run `ao init` first."));
         console.log(chalk.dim("Falling back to session discovery...\n"));
-        // Fall back to finding sessions without config
         await showFallbackStatus();
         return;
       }
@@ -206,6 +159,9 @@ export function registerStatus(program: Command): void {
         const sessionDir = getSessionDir(config.dataDir, projectId);
         const projectSessions = allTmux.filter((s) => s.startsWith(`${prefix}-`));
 
+        // Resolve agent for this project
+        const agent = getAgent(config, projectId);
+
         if (!opts.json) {
           console.log(header(projectConfig.name || projectId));
         }
@@ -221,7 +177,7 @@ export function registerStatus(program: Command): void {
         totalSessions += projectSessions.length;
 
         for (const session of projectSessions.sort()) {
-          const info = await gatherSessionInfo(session, sessionDir);
+          const info = await gatherSessionInfo(session, sessionDir, agent);
           if (opts.json) {
             jsonOutput.push(info);
           } else {
@@ -257,10 +213,24 @@ async function showFallbackStatus(): Promise<void> {
     chalk.dim(`  ${allTmux.length} tmux session${allTmux.length !== 1 ? "s" : ""} found\n`),
   );
 
+  // Use claude-code as default agent for fallback introspection
+  const agent = getAgentByName("claude-code");
+
   for (const session of allTmux.sort()) {
     const activityTs = await getTmuxActivity(session);
     const lastActivity = activityTs ? formatAge(activityTs) : "-";
     console.log(`  ${chalk.green(session)} ${chalk.dim(`(${lastActivity})`)}`);
+
+    // Try introspection even without config
+    try {
+      const sessionObj = buildSessionForIntrospect(session);
+      const introspection = await agent.introspect(sessionObj);
+      if (introspection?.summary) {
+        console.log(`     ${chalk.dim("Claude:")} ${introspection.summary.slice(0, 65)}`);
+      }
+    } catch {
+      // Not critical
+    }
   }
   console.log();
 }

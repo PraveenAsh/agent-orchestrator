@@ -67,7 +67,7 @@ beforeEach(() => {
     create: vi.fn(),
     destroy: vi.fn(),
     sendMessage: vi.fn().mockResolvedValue(undefined),
-    getOutput: vi.fn(),
+    getOutput: vi.fn().mockResolvedValue(""),
     isAlive: vi.fn().mockResolvedValue(true),
   };
 
@@ -76,7 +76,7 @@ beforeEach(() => {
     processName: "mock",
     getLaunchCommand: vi.fn(),
     getEnvironment: vi.fn(),
-    detectActivity: vi.fn().mockResolvedValue("active" as ActivityState),
+    detectActivity: vi.fn().mockReturnValue("active" as ActivityState),
     isProcessRunning: vi.fn(),
     isProcessing: vi.fn().mockResolvedValue(false),
     getSessionInfo: vi.fn().mockResolvedValue(null),
@@ -208,7 +208,7 @@ describe("check (single session)", () => {
   });
 
   it("detects stuck state from agent", async () => {
-    vi.mocked(mockAgent.detectActivity).mockResolvedValue("blocked");
+    vi.mocked(mockAgent.detectActivity).mockReturnValue("blocked");
 
     const session = makeSession({ status: "working" });
     vi.mocked(mockSessionManager.get).mockResolvedValue(session);
@@ -232,7 +232,7 @@ describe("check (single session)", () => {
   });
 
   it("detects needs_input from agent", async () => {
-    vi.mocked(mockAgent.detectActivity).mockResolvedValue("waiting_input");
+    vi.mocked(mockAgent.detectActivity).mockReturnValue("waiting_input");
 
     const session = makeSession({ status: "working" });
     vi.mocked(mockSessionManager.get).mockResolvedValue(session);
@@ -256,7 +256,9 @@ describe("check (single session)", () => {
   });
 
   it("preserves stuck state when detectActivity throws", async () => {
-    vi.mocked(mockAgent.detectActivity).mockRejectedValue(new Error("probe failed"));
+    vi.mocked(mockAgent.detectActivity).mockImplementation(() => {
+      throw new Error("probe failed");
+    });
 
     const session = makeSession({ status: "stuck" });
     vi.mocked(mockSessionManager.get).mockResolvedValue(session);
@@ -281,7 +283,9 @@ describe("check (single session)", () => {
   });
 
   it("preserves needs_input state when detectActivity throws", async () => {
-    vi.mocked(mockAgent.detectActivity).mockRejectedValue(new Error("probe failed"));
+    vi.mocked(mockAgent.detectActivity).mockImplementation(() => {
+      throw new Error("probe failed");
+    });
 
     const session = makeSession({ status: "needs_input" });
     vi.mocked(mockSessionManager.get).mockResolvedValue(session);

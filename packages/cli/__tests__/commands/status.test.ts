@@ -3,10 +3,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-const { mockTmux, mockGit, mockConfigRef } = vi.hoisted(() => ({
+const { mockTmux, mockGit, mockConfigRef, mockIntrospect } = vi.hoisted(() => ({
   mockTmux: vi.fn(),
   mockGit: vi.fn(),
   mockConfigRef: { current: null as Record<string, unknown> | null },
+  mockIntrospect: vi.fn(),
 }));
 
 vi.mock("../../src/lib/shell.js", () => ({
@@ -30,6 +31,21 @@ vi.mock("../../src/lib/shell.js", () => ({
 
 vi.mock("@agent-orchestrator/core", () => ({
   loadConfig: () => mockConfigRef.current,
+}));
+
+vi.mock("../../src/lib/plugins.js", () => ({
+  getAgent: () => ({
+    name: "claude-code",
+    processName: "claude",
+    detectActivity: () => "idle",
+    introspect: mockIntrospect,
+  }),
+  getAgentByName: () => ({
+    name: "claude-code",
+    processName: "claude",
+    detectActivity: () => "idle",
+    introspect: mockIntrospect,
+  }),
 }));
 
 let tmpDir: string;
@@ -76,6 +92,8 @@ beforeEach(() => {
   });
   mockTmux.mockReset();
   mockGit.mockReset();
+  mockIntrospect.mockReset();
+  mockIntrospect.mockResolvedValue(null);
 });
 
 afterEach(() => {

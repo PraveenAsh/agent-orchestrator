@@ -3,11 +3,12 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-const { mockTmux, mockExec, mockGit, mockConfigRef } = vi.hoisted(() => ({
+const { mockTmux, mockExec, mockGit, mockConfigRef, mockGetAgent } = vi.hoisted(() => ({
   mockTmux: vi.fn(),
   mockExec: vi.fn(),
   mockGit: vi.fn(),
   mockConfigRef: { current: null as Record<string, unknown> | null },
+  mockGetAgent: vi.fn(),
 }));
 
 vi.mock("../../src/lib/shell.js", () => ({
@@ -41,6 +42,11 @@ vi.mock("ora", () => ({
 
 vi.mock("@agent-orchestrator/core", () => ({
   loadConfig: () => mockConfigRef.current,
+}));
+
+vi.mock("../../src/lib/plugins.js", () => ({
+  getAgent: mockGetAgent,
+  getAgentByName: mockGetAgent,
 }));
 
 let tmpDir: string;
@@ -94,7 +100,15 @@ beforeEach(() => {
   mockTmux.mockReset();
   mockExec.mockReset();
   mockGit.mockReset();
+  mockGetAgent.mockReset();
   mockExec.mockResolvedValue({ stdout: "", stderr: "" });
+  mockGetAgent.mockReturnValue({
+    name: "claude-code",
+    processName: "claude",
+    getLaunchCommand: () => "unset CLAUDECODE && claude",
+    getEnvironment: () => ({}),
+    detectActivity: () => "idle",
+  });
 });
 
 afterEach(() => {

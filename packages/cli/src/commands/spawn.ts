@@ -7,6 +7,7 @@ import { loadConfig, type OrchestratorConfig, type ProjectConfig } from "@agent-
 import { exec, git, getTmuxSessions } from "../lib/shell.js";
 import { getSessionDir, writeMetadata, findSessionForIssue } from "../lib/metadata.js";
 import { banner } from "../lib/format.js";
+import { getAgent } from "../lib/plugins.js";
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -134,20 +135,14 @@ async function spawnSession(
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
-    // Start agent
-    const agentName = project.agent || config.defaults.agent;
-    let launchCmd: string;
-    if (agentName === "claude-code") {
-      const perms =
-        project.agentConfig?.permissions === "skip" ? " --dangerously-skip-permissions" : "";
-      launchCmd = `unset CLAUDECODE && claude${perms}`;
-    } else if (agentName === "codex") {
-      launchCmd = "codex";
-    } else if (agentName === "aider") {
-      launchCmd = "aider";
-    } else {
-      launchCmd = agentName;
-    }
+    // Start agent via plugin
+    const agent = getAgent(config, projectId);
+    const launchCmd = agent.getLaunchCommand({
+      sessionId: sessionName,
+      projectConfig: project,
+      issueId,
+      permissions: project.agentConfig?.permissions,
+    });
 
     await exec("tmux", ["send-keys", "-t", sessionName, launchCmd, "Enter"]);
 
