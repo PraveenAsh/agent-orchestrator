@@ -101,19 +101,6 @@ export function SessionCard({ session, onSend, onKill, onMerge, onRestore }: Ses
             restore session
           </button>
         )}
-        {!isRestorable &&
-          session.activity === "exited" &&
-          session.status !== "merged" && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onKill?.(session.id);
-              }}
-              className="shrink-0 rounded-md border border-[rgba(248,81,73,0.4)] px-2.5 py-0.5 text-[11px] text-[var(--color-accent-red)] transition-colors hover:bg-[rgba(248,81,73,0.15)]"
-            >
-              kill session
-            </button>
-          )}
         <a
           href={`/sessions/${encodeURIComponent(session.id)}`}
           onClick={(e) => e.stopPropagation()}
