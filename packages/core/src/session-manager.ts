@@ -162,6 +162,34 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
     return { runtime, agent, workspace, tracker, scm };
   }
 
+  /**
+   * Resolve which metadata directory a session lives in.
+   * Checks top-level dataDir first, then project-specific *-sessions subdirs.
+   */
+  function resolveMetaDir(sessionId: SessionId): string {
+    // Check top-level first
+    const topLevel = readMetadataRaw(config.dataDir, sessionId);
+    if (topLevel) return config.dataDir;
+
+    // Check project-specific subdirs
+    try {
+      const entries = readdirSync(config.dataDir);
+      for (const entry of entries) {
+        if (!entry.endsWith("-sessions")) continue;
+        const subdirPath = join(config.dataDir, entry);
+        try {
+          if (!statSync(subdirPath).isDirectory()) continue;
+        } catch { continue; }
+        const raw = readMetadataRaw(subdirPath, sessionId);
+        if (raw) return subdirPath;
+      }
+    } catch {
+      // dataDir doesn't exist or can't be read
+    }
+
+    return config.dataDir;
+  }
+
   // Define methods as local functions so `this` is not needed
   async function spawn(spawnConfig: SessionSpawnConfig): Promise<Session> {
     const project = config.projects[spawnConfig.projectId];
@@ -378,6 +406,8 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
           if (!sessionIds.includes(sid)) {
             sessionIds.push(sid);
             projectSubdirs.set(sid, subdirPath);
+          } else {
+            console.warn(`[session-manager] Duplicate session ID "${sid}" found in ${subdirPath}, skipping (already seen in ${projectSubdirs.get(sid) ?? config.dataDir})`);
           }
         }
       }
@@ -435,14 +465,15 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
   }
 
   async function get(sessionId: SessionId): Promise<Session | null> {
-    const raw = readMetadataRaw(config.dataDir, sessionId);
+    const metaDir = resolveMetaDir(sessionId);
+    const raw = readMetadataRaw(metaDir, sessionId);
     if (!raw) return null;
 
     // Get file timestamps for createdAt/lastActivityAt
     let createdAt: Date | undefined;
     let modifiedAt: Date | undefined;
     try {
-      const metaPath = join(config.dataDir, sessionId);
+      const metaPath = join(metaDir, sessionId);
       const stats = statSync(metaPath);
       createdAt = stats.birthtime;
       modifiedAt = stats.mtime;
@@ -475,7 +506,8 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
   }
 
   async function kill(sessionId: SessionId): Promise<void> {
-    const raw = readMetadataRaw(config.dataDir, sessionId);
+    const metaDir = resolveMetaDir(sessionId);
+    const raw = readMetadataRaw(metaDir, sessionId);
     if (!raw) throw new Error(`Session ${sessionId} not found`);
 
     const projectId = raw["project"] ?? "";
@@ -516,7 +548,7 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
     }
 
     // Archive metadata
-    deleteMetadata(config.dataDir, sessionId, true);
+    deleteMetadata(metaDir, sessionId, true);
   }
 
   async function cleanup(projectId?: string): Promise<CleanupResult> {
@@ -584,7 +616,8 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
   }
 
   async function send(sessionId: SessionId, message: string): Promise<void> {
-    const raw = readMetadataRaw(config.dataDir, sessionId);
+    const metaDir = resolveMetaDir(sessionId);
+    const raw = readMetadataRaw(metaDir, sessionId);
     if (!raw) throw new Error(`Session ${sessionId} not found`);
 
     // Build handle: use stored runtimeHandle, or fall back to session ID as tmux session name
