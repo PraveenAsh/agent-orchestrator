@@ -207,105 +207,111 @@ export function registerStart(program: Command): void {
             if (exists) {
               console.log(chalk.yellow(`Orchestrator session "${sessionId}" is already running (skipping creation)`));
             } else {
-              // Ensure CLAUDE.orchestrator.md exists
-              spinner.start("Generating orchestrator prompt");
-              ensureOrchestratorPrompt(
-                project.path,
-                config,
-                projectId,
-                project,
-                opts?.regenerate ?? false,
-              );
-              spinner.succeed("Orchestrator prompt ready");
-
-              // Ensure CLAUDE.local.md imports CLAUDE.orchestrator.md
-              spinner.start("Configuring CLAUDE.local.md");
               try {
+                // Ensure CLAUDE.orchestrator.md exists
+                spinner.start("Generating orchestrator prompt");
+                ensureOrchestratorPrompt(
+                  project.path,
+                  config,
+                  projectId,
+                  project,
+                  opts?.regenerate ?? false,
+                );
+                spinner.succeed("Orchestrator prompt ready");
+
+                // Ensure CLAUDE.local.md imports CLAUDE.orchestrator.md
+                spinner.start("Configuring CLAUDE.local.md");
                 ensureOrchestratorImport(project.path);
                 spinner.succeed("CLAUDE.local.md configured");
-              } catch (err) {
-                spinner.fail("Could not write CLAUDE.local.md");
-                throw new Error(
-                  `Failed to update CLAUDE.local.md: ${err instanceof Error ? err.message : String(err)}`,
-                  { cause: err },
-                );
-              }
 
-              // Get agent instance (used for hooks and launch)
-              const agent = getAgent(config, projectId);
+                // Get agent instance (used for hooks and launch)
+                const agent = getAgent(config, projectId);
 
-              // Setup agent hooks for automatic metadata updates
-              spinner.start("Configuring agent hooks");
-              try {
+                // Setup agent hooks for automatic metadata updates
+                spinner.start("Configuring agent hooks");
                 if (agent.setupWorkspaceHooks) {
                   await agent.setupWorkspaceHooks(project.path, { dataDir: config.dataDir });
                 }
                 spinner.succeed("Agent hooks configured");
+
+                spinner.start("Creating orchestrator session");
+
+                // Get agent launch command
+                const launchCmd = agent.getLaunchCommand({
+                  sessionId,
+                  projectConfig: project,
+                  permissions: project.agentConfig?.permissions ?? "default",
+                  model: project.agentConfig?.model,
+                });
+
+                // Determine environment variables
+                const envVarName = `${project.sessionPrefix.toUpperCase().replace(/[^A-Z0-9_]/g, "_")}_SESSION`;
+                const environment: Record<string, string> = {
+                  [envVarName]: sessionId,
+                  AO_SESSION: sessionId,
+                  AO_DATA_DIR: config.dataDir,
+                  DIRENV_LOG_FORMAT: "",
+                };
+
+                // Merge agent-specific environment
+                const agentEnv = agent.getEnvironment({
+                  sessionId,
+                  projectConfig: project,
+                  permissions: project.agentConfig?.permissions ?? "default",
+                  model: project.agentConfig?.model,
+                });
+                Object.assign(environment, agentEnv);
+
+                // NOTE: AO_PROJECT_ID is intentionally not set for orchestrator (uses flat metadata path)
+
+                // Create tmux session
+                await newTmuxSession({
+                  name: sessionId,
+                  cwd: project.path,
+                  environment,
+                });
+
+                try {
+                  // Launch agent
+                  await tmuxSendKeys(sessionId, launchCmd, true);
+
+                  spinner.succeed("Orchestrator session created");
+
+                  // Write metadata
+                  const runtimeHandle = JSON.stringify({
+                    id: sessionId,
+                    runtimeName: "tmux",
+                    data: {},
+                  });
+
+                  writeMetadata(config.dataDir, sessionId, {
+                    worktree: project.path,
+                    branch: project.defaultBranch,
+                    status: "working",
+                    project: projectId,
+                    createdAt: new Date().toISOString(),
+                    runtimeHandle,
+                  });
+                } catch (err) {
+                  // Cleanup tmux session if metadata write or agent launch fails
+                  try {
+                    await exec("tmux", ["kill-session", "-t", sessionId]);
+                  } catch {
+                    // Best effort cleanup - session may not exist
+                  }
+                  throw err;
+                }
               } catch (err) {
-                spinner.fail("Could not setup agent hooks");
+                spinner.fail("Orchestrator setup failed");
+                // Cleanup dashboard if orchestrator setup fails
+                if (dashboardProcess) {
+                  dashboardProcess.kill();
+                }
                 throw new Error(
-                  `Failed to setup agent hooks: ${err instanceof Error ? err.message : String(err)}`,
+                  `Failed to setup orchestrator: ${err instanceof Error ? err.message : String(err)}`,
                   { cause: err },
                 );
               }
-
-              spinner.start("Creating orchestrator session");
-
-              // Get agent launch command
-            const launchCmd = agent.getLaunchCommand({
-              sessionId,
-              projectConfig: project,
-              permissions: project.agentConfig?.permissions ?? "default",
-              model: project.agentConfig?.model,
-            });
-
-            // Determine environment variables
-            const envVarName = `${project.sessionPrefix.toUpperCase().replace(/[^A-Z0-9_]/g, "_")}_SESSION`;
-            const environment: Record<string, string> = {
-              [envVarName]: sessionId,
-              AO_SESSION: sessionId,
-              AO_DATA_DIR: config.dataDir,
-              DIRENV_LOG_FORMAT: "",
-            };
-
-            // Merge agent-specific environment
-            const agentEnv = agent.getEnvironment({
-              sessionId,
-              projectConfig: project,
-              permissions: project.agentConfig?.permissions ?? "default",
-              model: project.agentConfig?.model,
-            });
-            Object.assign(environment, agentEnv);
-
-            // NOTE: AO_PROJECT_ID is intentionally not set for orchestrator (uses flat metadata path)
-
-            // Create tmux session
-            await newTmuxSession({
-              name: sessionId,
-              cwd: project.path,
-              environment,
-            });
-
-              // Launch agent
-              await tmuxSendKeys(sessionId, launchCmd, true);
-
-              spinner.succeed("Orchestrator session created");
-
-              // Write metadata
-              const runtimeHandle = JSON.stringify({
-                id: sessionId,
-                runtimeName: "tmux",
-                data: {},
-              });
-
-              writeMetadata(config.dataDir, sessionId, {
-                worktree: project.path,
-                branch: project.defaultBranch,
-                status: "working",
-                project: projectId,
-                createdAt: new Date().toISOString(),
-                runtimeHandle,
-              });
             }
           }
 
