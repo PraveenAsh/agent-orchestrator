@@ -16,7 +16,6 @@ import type { Command } from "commander";
 import {
   loadConfig,
   generateOrchestratorPrompt,
-  setupClaudeHooks,
   hasTmuxSession,
   newTmuxSession,
   tmuxSendKeys,
@@ -227,15 +226,18 @@ export function registerStart(program: Command): void {
             );
           }
 
-          // Setup Claude Code hooks for automatic metadata updates
-          spinner.start("Configuring Claude Code hooks");
+          // Setup agent hooks for automatic metadata updates
+          spinner.start("Configuring agent hooks");
           try {
-            setupClaudeHooks(project.path);
-            spinner.succeed("Claude Code hooks configured");
+            const agent = getAgent(config, projectId);
+            if (agent.setupWorkspaceHooks) {
+              await agent.setupWorkspaceHooks(project.path, { dataDir: config.dataDir });
+            }
+            spinner.succeed("Agent hooks configured");
           } catch (err) {
-            spinner.fail("Could not setup Claude hooks");
+            spinner.fail("Could not setup agent hooks");
             throw new Error(
-              `Failed to setup Claude hooks: ${err instanceof Error ? err.message : String(err)}`,
+              `Failed to setup agent hooks: ${err instanceof Error ? err.message : String(err)}`,
             );
           }
 
