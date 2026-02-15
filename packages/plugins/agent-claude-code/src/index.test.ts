@@ -423,6 +423,39 @@ describe("detectActivity", () => {
       agent.detectActivity("⏵⏵ bypass permissions on (shift+tab to cycle)\n"),
     ).toBe("idle");
   });
+
+  it("returns idle for prompt with separator and status bar (no esc to interrupt)", () => {
+    // Full TUI frame: prompt + separator + status bar, idle state
+    expect(
+      agent.detectActivity("❯ \n────────────────────────────────────────────────────────────────────────────────\n  ⏵⏵ bypass permissions on (shift+tab to cycle)"),
+    ).toBe("idle");
+  });
+
+  it("returns idle for prompt with inline suggestion (no esc to interrupt)", () => {
+    // Claude Code shows suggestions like "❯ check CI status" when idle
+    expect(
+      agent.detectActivity("❯ check CI status on the PR\n────────────────────────────────────────────────────────────────────────────────\n  ⏵⏵ bypass permissions on (shift+tab to cycle)"),
+    ).toBe("idle");
+  });
+
+  it("returns active for prompt with input being processed (esc to interrupt)", () => {
+    // When Claude Code is actively processing, status bar has "esc to interrupt"
+    expect(
+      agent.detectActivity("❯ fix the bug\n────────────────────────────────────────────────────────────────────────────────\n  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt"),
+    ).toBe("active");
+  });
+
+  it("returns idle for real finished session output with suggestion", () => {
+    const realOutput = [
+      "  - 18 new tests (12 for the command, 6 for plugin resolution) — all passing",
+      "✻ Churned for 10m 56s",
+      "────────────────────────────────────────────────────────────────────────────────",
+      "❯ check CI status on the PR",
+      "────────────────────────────────────────────────────────────────────────────────",
+      "  ⏵⏵ bypass permissions on (shift+tab to cycle)",
+    ].join("\n");
+    expect(agent.detectActivity(realOutput)).toBe("idle");
+  });
 });
 
 // =========================================================================

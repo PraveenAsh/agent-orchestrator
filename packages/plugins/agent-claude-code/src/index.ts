@@ -472,6 +472,13 @@ function classifyTerminalOutput(terminalOutput: string): ActivityState {
 
   const lines = terminalOutput.trim().split("\n");
 
+  // Claude Code's status bar is the most reliable activity signal:
+  // - Active:  "⏵⏵ bypass permissions on ... · esc to interrupt"
+  // - Idle:    "⏵⏵ bypass permissions on ..." (no esc to interrupt)
+  // Check BEFORE stripping decorative lines.
+  const rawTail = lines.slice(-3).join("\n");
+  const hasEscToInterrupt = /esc to interrupt/i.test(rawTail);
+
   // Strip trailing decorative lines from Claude Code's TUI. From bottom up,
   // remove: status bar lines (contain ⏵), separator lines (all ─), and
   // empty lines. This exposes the actual prompt or content line for detection.
@@ -492,6 +499,11 @@ function classifyTerminalOutput(terminalOutput: string): ActivityState {
   // regardless of historical output (e.g. "Reading file..." from earlier).
   // The ❯ is Claude Code's prompt character.
   if (/^[❯>$#]\s*$/.test(lastLine)) return "idle";
+
+  // Claude Code shows inline suggestions after the prompt when idle, e.g.
+  // "❯ check CI status on the PR". Distinguish from active processing by
+  // checking the status bar: no "esc to interrupt" = idle with suggestion.
+  if (/^[❯>]\s+/.test(lastLine) && !hasEscToInterrupt) return "idle";
 
   // Check the bottom of the buffer for permission prompts BEFORE checking
   // full-buffer active indicators. Historical "Thinking"/"Reading" text in
