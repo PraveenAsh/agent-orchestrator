@@ -140,13 +140,16 @@ function startDashboard(port: number, webDir: string): ChildProcess {
  */
 async function stopDashboard(port: number): Promise<void> {
   try {
-    // Find PID listening on the port
+    // Find PIDs listening on the port (can be multiple: parent + children)
     const { stdout } = await exec("lsof", ["-ti", `:${port}`]);
-    const pid = stdout.trim();
+    const pids = stdout
+      .trim()
+      .split("\n")
+      .filter((p) => p.length > 0);
 
-    if (pid) {
-      // Kill the specific process
-      await exec("kill", [pid]);
+    if (pids.length > 0) {
+      // Kill all processes (pass PIDs as separate arguments)
+      await exec("kill", pids);
       console.log(chalk.green("Dashboard stopped"));
     } else {
       console.log(chalk.yellow(`Dashboard not running on port ${port}`));
@@ -269,6 +272,9 @@ export function registerStart(program: Command): void {
               model: project.agentConfig?.model,
             });
             Object.assign(environment, agentEnv);
+
+            // Remove AO_PROJECT_ID for orchestrator (uses flat metadata path)
+            delete environment.AO_PROJECT_ID;
 
             // Create tmux session
             await newTmuxSession({
