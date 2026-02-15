@@ -134,7 +134,7 @@ function metadataToSession(
 ): Session {
   return {
     id: sessionId,
-    projectId: meta["project"] ?? inferProjectId(sessionId, config),
+    projectId: meta["project"] || inferProjectId(sessionId, config),
     status: validateStatus(meta["status"]),
     activity: "idle",
     branch: meta["branch"] || null,
