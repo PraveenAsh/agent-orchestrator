@@ -471,6 +471,18 @@ function classifyTerminalOutput(terminalOutput: string): ActivityState {
   if (!terminalOutput.trim()) return "idle";
 
   const lines = terminalOutput.trim().split("\n");
+
+  // Strip trailing status bar lines. Claude Code shows a persistent status bar
+  // like "⏵⏵ bypass permissions on (shift+tab to cycle)" below the prompt
+  // when --dangerously-skip-permissions is enabled. These must be removed
+  // before idle/prompt detection so they don't shadow the real prompt line
+  // or false-positive on the "bypass permissions" check.
+  while (lines.length > 0 && /⏵/.test(lines[lines.length - 1] ?? "")) {
+    lines.pop();
+  }
+
+  if (!lines.length) return "idle";
+
   const lastLine = lines[lines.length - 1]?.trim() ?? "";
 
   // Check the last line FIRST — if the prompt is visible, the agent is idle

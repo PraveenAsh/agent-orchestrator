@@ -390,6 +390,39 @@ describe("detectActivity", () => {
   it("returns active for non-empty output with no special patterns", () => {
     expect(agent.detectActivity("some random terminal output\n")).toBe("active");
   });
+
+  // -----------------------------------------------------------------------
+  // Status bar false-positive regression tests
+  // -----------------------------------------------------------------------
+  it("does NOT return waiting_input for status bar bypass permissions text", () => {
+    // The status bar shows "⏵⏵ bypass permissions on (shift+tab to cycle)"
+    // when --dangerously-skip-permissions is enabled. This must NOT be
+    // mistaken for an interactive permission prompt.
+    expect(
+      agent.detectActivity("some output\n⏵⏵ bypass permissions on (shift+tab to cycle)\n"),
+    ).toBe("active");
+  });
+
+  it("returns idle when prompt is followed by status bar", () => {
+    // When a session finishes and shows the idle ❯ prompt, the status bar
+    // sits below it. The detector must strip the status bar and see the prompt.
+    expect(
+      agent.detectActivity("Task completed successfully.\n❯ \n⏵⏵ bypass permissions on (shift+tab to cycle)\n"),
+    ).toBe("idle");
+  });
+
+  it("still returns waiting_input for actual bypass permissions prompt", () => {
+    // Real interactive prompt should still be detected.
+    expect(
+      agent.detectActivity("bypass all future permissions for this session\n"),
+    ).toBe("waiting_input");
+  });
+
+  it("returns idle when only status bar lines remain after stripping", () => {
+    expect(
+      agent.detectActivity("⏵⏵ bypass permissions on (shift+tab to cycle)\n"),
+    ).toBe("idle");
+  });
 });
 
 // =========================================================================
