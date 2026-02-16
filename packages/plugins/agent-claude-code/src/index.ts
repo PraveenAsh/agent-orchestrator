@@ -433,16 +433,22 @@ async function findClaudeProcess(handle: RuntimeHandle): Promise<number | null> 
 // Terminal Output Patterns for detectActivity
 // =============================================================================
 
-/** Classify Claude Code's activity state from terminal output (pure, sync). */
+/**
+ * Classify Claude Code's activity state from terminal output (pure, sync).
+ * @deprecated Use getActivityState() instead - this is terminal-based classification.
+ *
+ * Note: "idle" here means "no visible terminal activity", which differs from
+ * getActivityState()'s "idle" meaning "30+ seconds with no JSONL updates".
+ */
 function classifyTerminalOutput(terminalOutput: string): ActivityState {
-  // Empty output — can't determine state, assume ready (safe default)
-  if (!terminalOutput.trim()) return "ready";
+  // Empty output — no visible terminal activity, return idle (terminal context)
+  if (!terminalOutput.trim()) return "idle";
 
   const lines = terminalOutput.trim().split("\n");
   const lastLine = lines[lines.length - 1]?.trim() ?? "";
 
   // Check the last line FIRST — if the prompt is visible, the agent is ready
-  // regardless of historical output (e.g. "Reading file..." from earlier).
+  // (terminal context: prompt visible = ready for input, regardless of JSONL state).
   // The ❯ is Claude Code's prompt character.
   if (/^[❯>$#]\s*$/.test(lastLine)) return "ready";
 
