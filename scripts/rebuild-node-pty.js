@@ -30,7 +30,7 @@ try {
     stdio: "inherit",
   });
   console.log("✅ node-pty rebuilt successfully");
-} catch (error) {
+} catch {
   console.warn("⚠️  node-pty rebuild failed (non-critical)");
   console.warn("   DirectTerminal may not work correctly");
   console.warn("   Run manually: cd node_modules/.pnpm/node-pty@1.1.0/node_modules/node-pty && npx node-gyp rebuild");
