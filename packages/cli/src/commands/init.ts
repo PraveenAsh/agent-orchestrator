@@ -6,6 +6,11 @@ import { stringify as yamlStringify } from "yaml";
 import chalk from "chalk";
 import type { Command } from "commander";
 import { git, gh, execSilent } from "../lib/shell.js";
+import {
+  detectProjectType,
+  generateRulesFromTemplates,
+  formatProjectTypeForDisplay,
+} from "../lib/project-detection.js";
 
 async function prompt(
   rl: ReturnType<typeof createInterface>,
@@ -88,13 +93,24 @@ export function registerInit(program: Command): void {
     .command("init")
     .description("Interactive setup wizard — creates agent-orchestrator.yaml")
     .option("-o, --output <path>", "Output file path", "agent-orchestrator.yaml")
-    .action(async (opts: { output: string }) => {
+    .option("--auto", "Auto-generate config with sensible defaults (no prompts)")
+    .option(
+      "--smart",
+      "Analyze project and generate custom rules (requires --auto, uses AI if available)",
+    )
+    .action(async (opts: { output: string; auto?: boolean; smart?: boolean }) => {
       const outputPath = resolve(opts.output);
 
       if (existsSync(outputPath)) {
         console.log(chalk.yellow(`Config already exists: ${outputPath}`));
         console.log("Delete it first or specify a different path with --output.");
         process.exit(1);
+      }
+
+      // Handle --auto mode
+      if (opts.auto) {
+        await handleAutoMode(outputPath, opts.smart || false);
+        return;
       }
 
       console.log(chalk.bold.cyan("\n  Agent Orchestrator — Setup Wizard\n"));
@@ -296,4 +312,117 @@ export function registerInit(program: Command): void {
         rl.close();
       }
     });
+}
+
+async function handleAutoMode(outputPath: string, smart: boolean): Promise<void> {
+  const workingDir = cwd();
+
+  console.log(chalk.bold.cyan("\n  Agent Orchestrator — Auto Setup\n"));
+
+  if (smart) {
+    console.log(chalk.dim("  🤖 Analyzing your project...\n"));
+  } else {
+    console.log(chalk.dim("  🚀 Auto-generating config with smart defaults...\n"));
+  }
+
+  // Detect environment
+  const env = await detectEnvironment(workingDir);
+
+  // Detect project type
+  const projectType = await detectProjectType(workingDir);
+
+  // Show detection results
+  if (env.isGitRepo) {
+    console.log(chalk.green("  ✓ Git repository detected"));
+    if (env.ownerRepo) {
+      console.log(chalk.dim(`    Remote: ${env.ownerRepo}`));
+    }
+    if (env.currentBranch) {
+      console.log(chalk.dim(`    Branch: ${env.currentBranch}`));
+    }
+  }
+
+  if (projectType.languages.length > 0 || projectType.frameworks.length > 0) {
+    console.log(chalk.green("  ✓ Project type detected"));
+    const formattedType = formatProjectTypeForDisplay(projectType);
+    formattedType.split("\n").forEach((line) => {
+      console.log(chalk.dim(`    ${line}`));
+    });
+  }
+
+  console.log();
+
+  // Generate agent rules
+  let agentRules: string;
+
+  if (smart) {
+    // TODO: Implement AI-powered rule generation in future PR
+    console.log(chalk.yellow("  ⚠ AI-powered rule generation not yet implemented"));
+    console.log(chalk.dim("  Using template-based rules for now...\n"));
+    agentRules = await generateRulesFromTemplates(projectType);
+  } else {
+    agentRules = await generateRulesFromTemplates(projectType);
+  }
+
+  // Build config with smart defaults
+  const projectId = env.isGitRepo ? basename(workingDir) : "my-project";
+  const repo = env.ownerRepo || "owner/repo";
+  const path = env.isGitRepo ? workingDir : `~/${projectId}`;
+  const defaultBranch = env.currentBranch || "main";
+
+  const config: Record<string, unknown> = {
+    dataDir: "~/.agent-orchestrator",
+    worktreeDir: "~/.worktrees",
+    port: 3000,
+    defaults: {
+      runtime: "tmux",
+      agent: "claude-code",
+      workspace: "worktree",
+      notifiers: ["desktop"],
+    },
+    projects: {
+      [projectId]: {
+        repo,
+        path,
+        defaultBranch,
+        agentRules,
+      },
+    },
+  };
+
+  // Write config
+  const yamlContent = yamlStringify(config, { indent: 2 });
+  writeFileSync(outputPath, yamlContent);
+
+  // Show success message
+  console.log(chalk.green(`✓ Config written to ${outputPath}\n`));
+
+  // Show generated rules
+  if (agentRules) {
+    console.log(chalk.bold("Generated agent rules:\n"));
+    console.log(chalk.dim("---"));
+    agentRules.split("\n").forEach((line) => {
+      console.log(chalk.dim(`${line}`));
+    });
+    console.log(chalk.dim("---\n"));
+  }
+
+  // Show next steps
+  console.log(chalk.bold("Next steps:\n"));
+  console.log("  1. Review and customize (optional):");
+  console.log(chalk.cyan(`     nano ${outputPath}\n`));
+  console.log("  2. Spawn your first agent:");
+  console.log(chalk.cyan(`     ao spawn ${projectId} ISSUE-123\n`));
+  console.log("  3. Monitor progress:");
+  console.log(chalk.cyan("     ao status\n"));
+
+  // Show warnings
+  if (!env.hasTmux) {
+    console.log(chalk.yellow("⚠ tmux not found - install with: brew install tmux"));
+  }
+  if (!env.ghAuthed && env.hasGh) {
+    console.log(chalk.yellow("⚠ GitHub CLI not authenticated - run: gh auth login"));
+  }
+
+  console.log();
 }
