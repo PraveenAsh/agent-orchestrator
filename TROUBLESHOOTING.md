@@ -32,10 +32,15 @@ node -e "const pty = require('./node_modules/.pnpm/node-pty@1.1.0/node_modules/n
 - After copying the repo to a new location
 - On some macOS configurations with Homebrew Node
 
-**Permanent fix**: Add to your setup script:
+**Permanent fix**: The postinstall hook automatically rebuilds node-pty:
 ```bash
-pnpm install
-cd node_modules/.pnpm/node-pty@1.1.0/node_modules/node-pty && npx node-gyp rebuild && cd -
+pnpm install  # Automatically rebuilds node-pty via postinstall hook
+```
+
+If you need to manually rebuild:
+```bash
+cd node_modules/.pnpm/node-pty@1.1.0/node_modules/node-pty
+npx node-gyp rebuild
 ```
 
 ## Other Issues
