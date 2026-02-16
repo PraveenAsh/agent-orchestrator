@@ -87,15 +87,23 @@ export async function detectProjectType(dir: string): Promise<ProjectType> {
       type.tools.push("pyproject");
     }
 
-    // Detect Python frameworks
+    // Detect Python frameworks (check both files but avoid duplicates)
     const reqFiles = ["requirements.txt", "pyproject.toml"];
+    const addFramework = (framework: string) => {
+      if (!type.frameworks.includes(framework)) {
+        type.frameworks.push(framework);
+      }
+    };
+
     for (const file of reqFiles) {
       if (hasFile(file)) {
         const content = readFileSync(join(dir, file), "utf-8").toLowerCase();
-        if (content.includes("fastapi")) type.frameworks.push("fastapi");
-        if (content.includes("django")) type.frameworks.push("django");
-        if (content.includes("flask")) type.frameworks.push("flask");
-        if (content.includes("pytest")) type.testFramework = "pytest";
+        if (content.includes("fastapi")) addFramework("fastapi");
+        if (content.includes("django")) addFramework("django");
+        if (content.includes("flask")) addFramework("flask");
+        if (content.includes("pytest") && !type.testFramework) {
+          type.testFramework = "pytest";
+        }
       }
     }
   }
