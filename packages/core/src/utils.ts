@@ -36,7 +36,7 @@ export function validateUrl(url: string, label: string): void {
  * Read only the last 4KB of JSONL files to find the last entry.
  * Avoids loading entire (potentially large) files into memory.
  */
-export const TAIL_READ_BYTES = 4096;
+const TAIL_READ_BYTES = 4096;
 
 /**
  * Read the last entry from a JSONL file efficiently.
