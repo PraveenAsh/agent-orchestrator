@@ -27,6 +27,7 @@ import {
 import { exec, getTmuxSessions } from "../lib/shell.js";
 import { getAgent } from "../lib/plugins.js";
 import { findWebDir } from "../lib/web-dir.js";
+import { findAvailablePort } from "../lib/port.js";
 
 /**
  * Ensure CLAUDE.orchestrator.md exists in the project directory.
@@ -194,7 +195,14 @@ export function registerStart(program: Command): void {
           const config = loadConfig(configPath);
           const { projectId, project } = resolveProject(config, projectArg);
           const sessionId = `${project.sessionPrefix}-orchestrator`;
-          const port = config.port;
+
+          // Find available port (default 4000, or user-specified)
+          const preferredPort = config.port ?? 4000;
+          const port = await findAvailablePort(preferredPort);
+
+          if (port !== preferredPort) {
+            console.log(chalk.yellow(`Port ${preferredPort} in use, using ${port} instead`));
+          }
 
           console.log(chalk.bold(`\nStarting orchestrator for ${chalk.cyan(project.name)}\n`));
 
