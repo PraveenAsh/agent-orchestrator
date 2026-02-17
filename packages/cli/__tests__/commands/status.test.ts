@@ -115,7 +115,7 @@ beforeEach(() => {
       "my-app": {
         name: "My App",
         repo: "org/my-app",
-        path: "/home/user/my-app",
+        path: join(tmpDir, "main-repo"),
         defaultBranch: "main",
         sessionPrefix: "app",
         scm: { plugin: "github" },
@@ -127,7 +127,7 @@ beforeEach(() => {
   } as Record<string, unknown>;
 
   // Calculate and create sessions directory for hash-based architecture
-  sessionsDir = getSessionsDir(configPath, "/home/user/my-app");
+  sessionsDir = getSessionsDir(configPath, join(tmpDir, "main-repo"));
   mkdirSync(sessionsDir, { recursive: true });
 
   program = new Command();

@@ -62,6 +62,7 @@ let mockRuntime: Runtime;
 let mockAgent: Agent;
 let mockWorkspace: Workspace;
 let config: OrchestratorConfig;
+let project: OrchestratorConfig["projects"][string];
 
 function makeHandle(id: string): RuntimeHandle {
   return { id, runtimeName: "mock", data: {} };
@@ -70,16 +71,6 @@ function makeHandle(id: string): RuntimeHandle {
 function mockGh(result: unknown): void {
   ghMock.mockResolvedValueOnce({ stdout: JSON.stringify(result) });
 }
-
-const project = {
-  name: "Test App",
-  repo: "acme/app",
-  path: "/tmp/test-app",
-  defaultBranch: "main",
-  sessionPrefix: "app",
-  tracker: { plugin: "github" },
-  scm: { plugin: "github" },
-};
 
 const pr: PRInfo = {
   number: 42,
@@ -124,6 +115,17 @@ beforeEach(() => {
   // Create a temporary config file
   configPath = join(tmpDir, "agent-orchestrator.yaml");
   writeFileSync(configPath, "projects: {}\n");
+
+  // Initialize project with tmpDir-based path
+  project = {
+    name: "Test App",
+    repo: "acme/app",
+    path: join(tmpDir, "test-app"),
+    defaultBranch: "main",
+    sessionPrefix: "app",
+    tracker: { plugin: "github" },
+    scm: { plugin: "github" },
+  };
 
   mockRuntime = {
     name: "mock",
@@ -180,7 +182,7 @@ beforeEach(() => {
   };
 
   // Calculate sessions directory
-  sessionsDir = getSessionsDir(configPath, "/tmp/test-app");
+  sessionsDir = getSessionsDir(configPath, project.path);
   mkdirSync(sessionsDir, { recursive: true });
 });
 
