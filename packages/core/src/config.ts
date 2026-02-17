@@ -145,10 +145,10 @@ function applyProjectDefaults(config: OrchestratorConfig): OrchestratorConfig {
       project.name = id;
     }
 
-    // Derive session prefix from project ID if not set
-    // Sanitize to match metadata ID rules: [a-zA-Z0-9_-]+
+    // Derive session prefix from project path basename if not set
     if (!project.sessionPrefix) {
-      project.sessionPrefix = id.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const projectId = basename(project.path);
+      project.sessionPrefix = generateSessionPrefix(projectId);
     }
 
     // Infer SCM from repo if not set
