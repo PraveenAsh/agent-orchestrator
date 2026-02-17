@@ -26,13 +26,13 @@ jobs:
 
       - name: Build test image
         working-directory: tests/integration
-        run: docker-compose build
+        run: docker compose build
 
       - name: Run onboarding test
         id: test
         working-directory: tests/integration
         run: |
-          docker-compose up --abort-on-container-exit --exit-code-from onboarding-test
+          docker compose up --abort-on-container-exit --exit-code-from onboarding-test
 
       - name: Extract metrics
         if: always()
@@ -43,7 +43,7 @@ jobs:
       - name: Cleanup
         if: always()
         working-directory: tests/integration
-        run: docker-compose down -v
+        run: docker compose down -v
 
       - name: Upload test logs
         if: failure()
