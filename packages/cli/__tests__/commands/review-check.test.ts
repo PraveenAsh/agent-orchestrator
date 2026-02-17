@@ -177,7 +177,7 @@ describe("review-check command", () => {
 
   it("skips sessions with non-matching prefix", async () => {
     writeFileSync(
-      join(tmpDir, "other-1"),
+      join(sessionsDir, "other-1"),
       "branch=feat/fix\npr=https://github.com/org/my-app/pull/10\n",
     );
 
