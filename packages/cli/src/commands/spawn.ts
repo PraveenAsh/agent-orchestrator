@@ -1,9 +1,8 @@
 import chalk from "chalk";
 import ora from "ora";
 import type { Command } from "commander";
-import { loadConfig, getSessionsDir, type OrchestratorConfig, type ProjectConfig } from "@composio/ao-core";
-import { exec, getTmuxSessions } from "../lib/shell.js";
-import { findSessionForIssue } from "../lib/metadata.js";
+import { loadConfig, type OrchestratorConfig, type ProjectConfig } from "@composio/ao-core";
+import { exec } from "../lib/shell.js";
 import { banner } from "../lib/format.js";
 import { getSessionManager } from "../lib/create-session-manager.js";
 
@@ -106,13 +105,11 @@ export function registerBatchSpawn(program: Command): void {
       console.log(`  Issues:  ${issues.join(", ")}`);
       console.log();
 
-      let allTmux = await getTmuxSessions();
+      const sm = await getSessionManager(config);
       const created: Array<{ session: string; issue: string }> = [];
       const skipped: Array<{ issue: string; existing: string }> = [];
       const failed: Array<{ issue: string; error: string }> = [];
       const spawnedIssues = new Set<string>();
-
-      const sessionsDir = getSessionsDir(config.configPath, project.path);
 
       for (const issue of issues) {
         // Duplicate detection — check both existing sessions and same-run duplicates
@@ -121,10 +118,15 @@ export function registerBatchSpawn(program: Command): void {
           skipped.push({ issue, existing: "(this batch)" });
           continue;
         }
-        const existing = await findSessionForIssue(sessionsDir, issue, allTmux, projectId);
-        if (existing) {
-          console.log(chalk.yellow(`  Skip ${issue} — already has session: ${existing}`));
-          skipped.push({ issue, existing });
+
+        // Check existing sessions via session manager (works with hash-based naming)
+        const existingSessions = await sm.list(projectId);
+        const existingSession = existingSessions.find(
+          (s) => s.issueId?.toLowerCase() === issue.toLowerCase(),
+        );
+        if (existingSession) {
+          console.log(chalk.yellow(`  Skip ${issue} — already has session: ${existingSession.id}`));
+          skipped.push({ issue, existing: existingSession.id });
           continue;
         }
 
@@ -132,8 +134,6 @@ export function registerBatchSpawn(program: Command): void {
           const sessionName = await spawnSession(config, projectId, project, issue, opts.open);
           created.push({ session: sessionName, issue });
           spawnedIssues.add(issue.toLowerCase());
-          // Refresh tmux session list so next iteration sees the new session
-          allTmux = await getTmuxSessions();
         } catch (err) {
           const message = String(err);
           console.error(chalk.red(`  ✗ ${issue} — ${err}`));

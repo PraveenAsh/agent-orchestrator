@@ -104,25 +104,20 @@ export function registerSession(program: Command): void {
       console.log(chalk.bold("Checking for completed sessions...\n"));
 
       if (opts.dryRun) {
-        // For dry-run, use list + manual checks to show what would be cleaned
+        // Dry-run delegates to sm.cleanup() with dryRun flag so it uses the
+        // same live checks (PR state, runtime alive, tracker) as actual cleanup.
         const sm = await getSessionManager(config);
-        const sessions = await sm.list(opts.project);
-        let found = 0;
+        const result = await sm.cleanup(opts.project, { dryRun: true });
 
-        for (const s of sessions) {
-          // Show sessions that would be killed (dead runtime or merged status)
-          if (s.status === "killed" || s.status === "merged" || s.status === "done") {
-            found++;
-            console.log(chalk.yellow(`  Would kill ${s.id}: status=${s.status}`));
-          }
-        }
-
-        if (found === 0) {
+        if (result.killed.length === 0) {
           console.log(chalk.dim("  No sessions to clean up."));
         } else {
+          for (const id of result.killed) {
+            console.log(chalk.yellow(`  Would kill ${id}`));
+          }
           console.log(
             chalk.dim(
-              `\nDry run complete. ${found} session${found !== 1 ? "s" : ""} would be cleaned.`,
+              `\nDry run complete. ${result.killed.length} session${result.killed.length !== 1 ? "s" : ""} would be cleaned.`,
             ),
           );
         }

@@ -44,6 +44,7 @@ async function gatherSessionInfo(
   session: Session,
   agent: Agent,
   scm: SCM,
+  projectConfig: ReturnType<typeof loadConfig>,
 ): Promise<SessionInfo> {
   let branch = session.branch;
   const status = session.status;
@@ -90,7 +91,7 @@ async function gatherSessionInfo(
 
   if (branch) {
     try {
-      const project = config.projects[session.projectId];
+      const project = projectConfig.projects[session.projectId];
       if (project) {
         const prInfo: PRInfo | null = await scm.detectPR(session, project);
         if (prInfo) {
@@ -129,9 +130,6 @@ async function gatherSessionInfo(
     activity,
   };
 }
-
-// We need config accessible in gatherSessionInfo
-let config: ReturnType<typeof loadConfig>;
 
 // Column widths for the table
 const COL = {
@@ -195,6 +193,7 @@ export function registerStatus(program: Command): void {
     .option("-p, --project <id>", "Filter by project ID")
     .option("--json", "Output as JSON")
     .action(async (opts: { project?: string; json?: boolean }) => {
+      let config: ReturnType<typeof loadConfig>;
       try {
         config = loadConfig();
       } catch {
@@ -263,7 +262,7 @@ export function registerStatus(program: Command): void {
         }
 
         // Gather all session info in parallel
-        const infoPromises = projectSessions.map((s) => gatherSessionInfo(s, agent, scm));
+        const infoPromises = projectSessions.map((s) => gatherSessionInfo(s, agent, scm, config));
         const sessionInfos = await Promise.all(infoPromises);
 
         for (const info of sessionInfos) {

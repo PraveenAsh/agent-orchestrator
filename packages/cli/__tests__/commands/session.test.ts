@@ -356,13 +356,23 @@ describe("session cleanup", () => {
       "branch=feat/fix\nstatus=merged\npr=https://github.com/org/repo/pull/42\n",
     );
 
+    // Dry-run now delegates to sm.cleanup({ dryRun: true })
+    mockSessionManager.cleanup.mockResolvedValue({
+      killed: ["app-1"],
+      skipped: [],
+      errors: [],
+    } satisfies CleanupResult);
+
     await program.parseAsync(["node", "test", "session", "cleanup", "--dry-run"]);
 
     const output = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
     expect(output).toContain("Would kill app-1");
 
-    // Metadata should still exist
+    // Metadata should still exist (dry-run doesn't actually kill)
     expect(existsSync(join(sessionsDir, "app-1"))).toBe(true);
+
+    // Verify dryRun option was passed
+    expect(mockSessionManager.cleanup).toHaveBeenCalledWith(undefined, { dryRun: true });
   });
 
   it("reports errors from cleanup", async () => {
