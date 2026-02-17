@@ -31,8 +31,10 @@ import {
   type Notifier,
   type Session,
   type EventPriority,
+  type ProjectConfig,
 } from "./types.js";
 import { updateMetadata } from "./metadata.js";
+import { getSessionsDir, generateProjectId } from "./paths.js";
 
 /** Parse a duration string like "10m", "30s", "1h" to milliseconds. */
 function parseDuration(str: string): number {
@@ -421,8 +423,18 @@ export function createLifecycleManager(deps: LifecycleManagerDeps): LifecycleMan
       // State transition detected
       states.set(session.id, newStatus);
 
-      // Update metadata
-      updateMetadata(config.dataDir, session.id, { status: newStatus });
+      // Update metadata — find the sessions directory for this project
+      const project = Object.values(config.projects).find(
+        (p) => generateProjectId(p.path) === session.projectId,
+      );
+      if (project) {
+        const sessionsDir = config.configPath
+          ? getSessionsDir(config.configPath, project.path)
+          : config.dataDir;
+        if (sessionsDir) {
+          updateMetadata(sessionsDir, session.id, { status: newStatus });
+        }
+      }
 
       // Reset allCompleteEmitted when any session becomes active again
       if (newStatus !== "merged" && newStatus !== "killed") {
