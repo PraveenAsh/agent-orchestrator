@@ -68,6 +68,7 @@ git config user.name "Test User"
 cat > agent-orchestrator.yaml << 'EOF'
 dataDir: /tmp/ao-test-data
 worktreeDir: /tmp/ao-test-worktrees
+port: 9000
 
 projects:
   test-project:
@@ -95,7 +96,7 @@ DASHBOARD_PID=$!
 # Wait for dashboard to be ready (max 30 seconds)
 echo "  Waiting for dashboard to start..."
 for i in {1..30}; do
-    if curl -s http://localhost:4000 > /dev/null 2>&1; then
+    if curl -s http://localhost:9000 > /dev/null 2>&1; then
         break
     fi
     if ! kill -0 $DASHBOARD_PID 2>/dev/null; then
@@ -104,7 +105,7 @@ for i in {1..30}; do
     sleep 1
 done
 
-if ! curl -s http://localhost:4000 > /dev/null 2>&1; then
+if ! curl -s http://localhost:9000 > /dev/null 2>&1; then
     fail_step "Step 6: Dashboard not responding after 30s"
 fi
 
@@ -114,12 +115,12 @@ end_step "Step 6: Dashboard started successfully"
 start_step "Step 7: Verify dashboard API"
 
 # Test /api/sessions endpoint
-if ! curl -sf http://localhost:4000/api/sessions > /dev/null; then
+if ! curl -sf http://localhost:9000/api/sessions > /dev/null; then
     fail_step "Step 7: /api/sessions endpoint failed"
 fi
 
 # Test SSE events endpoint (just verify it responds, don't wait for events)
-if ! timeout 2 curl -sf http://localhost:4000/api/events > /dev/null 2>&1; then
+if ! timeout 2 curl -sf http://localhost:9000/api/events > /dev/null 2>&1; then
     # SSE might timeout, that's ok - we just want to verify it exists
     :
 fi
@@ -162,7 +163,7 @@ project=test-project
 EOF
 
 # Test that the session detail page loads (where terminal would be)
-if ! curl -sf http://localhost:4000/sessions/test-project-orchestrator > /dev/null; then
+if ! curl -sf http://localhost:9000/sessions/test-project-orchestrator > /dev/null; then
     fail_step "Step 9: Orchestrator session page failed to load"
 fi
 

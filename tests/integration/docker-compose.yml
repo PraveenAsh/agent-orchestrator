@@ -14,8 +14,11 @@ services:
     volumes:
       - ../..:/workspace/agent-orchestrator
     # Expose ports for debugging (optional)
+    # Use 9000/9001/9003 on host to avoid conflicts with orchestrator
+    # Container still uses 9000/3001/3003 internally
     ports:
-      - "4000:4000"
-      - "3003:3003"
+      - "9000:9000"  # Dashboard (host:container)
+      - "9001:3001"  # Terminal WebSocket (host:container)
+      - "9003:3003"  # DirectTerminal WebSocket (host:container)
     # Increase shared memory for browser-based tests (future)
     shm_size: 2gb
