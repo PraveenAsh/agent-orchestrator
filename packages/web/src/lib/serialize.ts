@@ -278,10 +278,6 @@ export async function enrichSessionIssueTitle(
   }
 }
 
-// Re-export humanizeBranch from format.ts (kept separate to avoid
-// pulling server-side TTLCache side-effects into client bundles).
-export { humanizeBranch } from "./format";
-
 /** Compute dashboard stats from a list of sessions. */
 export function computeStats(sessions: DashboardSession[]): DashboardStats {
   return {
