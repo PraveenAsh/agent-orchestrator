@@ -66,7 +66,6 @@ vi.mock("@composio/ao-core", async (importOriginal) => {
 
 vi.mock("../../src/lib/create-session-manager.js", () => ({
   getSessionManager: async (): Promise<SessionManager> => mockSessionManager as SessionManager,
-  getPluginRegistry: vi.fn(),
 }));
 
 /** Parse a key=value metadata file into a Record<string, string>. */

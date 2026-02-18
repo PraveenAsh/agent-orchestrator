@@ -38,9 +38,3 @@ export async function getSessionManager(config: OrchestratorConfig): Promise<Ses
   return createSessionManager({ config, registry });
 }
 
-/**
- * Get the plugin registry directly (for commands that need individual plugins).
- */
-export async function getPluginRegistry(config: OrchestratorConfig): Promise<PluginRegistry> {
-  return getRegistry(config);
-}

@@ -150,7 +150,6 @@ function buildSessionsFromDir(
 
 vi.mock("../../src/lib/create-session-manager.js", () => ({
   getSessionManager: async (): Promise<SessionManager> => mockSessionManager as SessionManager,
-  getPluginRegistry: vi.fn(),
 }));
 
 let tmpDir: string;
