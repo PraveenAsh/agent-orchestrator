@@ -255,5 +255,20 @@ describe("getAttentionLevel", () => {
       const session = makeSession({ status: "cleanup", activity: "exited", pr: null });
       expect(getAttentionLevel(session)).toBe("done");
     });
+
+    it("returns done when PR is merged even if session status is stale (pr_open)", () => {
+      // This is the exact bug scenario: metadata says "pr_open" but GitHub says "merged"
+      // After reconcileSessionStatus, status should be "merged" and attention level "done"
+      const pr = makePR({ state: "merged" });
+      const session = makeSession({ status: "merged", activity: "idle", pr });
+      expect(getAttentionLevel(session)).toBe("done");
+    });
+
+    it("returns done when PR state is merged regardless of session status", () => {
+      // getAttentionLevel checks pr.state directly for merged/closed
+      const pr = makePR({ state: "merged" });
+      const session = makeSession({ status: "pr_open", activity: "idle", pr });
+      expect(getAttentionLevel(session)).toBe("done");
+    });
   });
 });
