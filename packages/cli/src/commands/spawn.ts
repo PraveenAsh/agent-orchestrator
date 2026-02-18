@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import ora from "ora";
 import type { Command } from "commander";
-import { loadConfig, type OrchestratorConfig, type ProjectConfig } from "@composio/ao-core";
+import { loadConfig, type OrchestratorConfig } from "@composio/ao-core";
 import { exec } from "../lib/shell.js";
 import { banner } from "../lib/format.js";
 import { getSessionManager } from "../lib/create-session-manager.js";
@@ -9,7 +9,6 @@ import { getSessionManager } from "../lib/create-session-manager.js";
 async function spawnSession(
   config: OrchestratorConfig,
   projectId: string,
-  project: ProjectConfig,
   issueId?: string,
   openTab?: boolean,
 ): Promise<string> {
@@ -61,8 +60,7 @@ export function registerSpawn(program: Command): void {
     .option("--open", "Open session in terminal tab")
     .action(async (projectId: string, issueId: string | undefined, opts: { open?: boolean }) => {
       const config = loadConfig();
-      const project = config.projects[projectId];
-      if (!project) {
+      if (!config.projects[projectId]) {
         console.error(
           chalk.red(
             `Unknown project: ${projectId}\nAvailable: ${Object.keys(config.projects).join(", ")}`,
@@ -72,7 +70,7 @@ export function registerSpawn(program: Command): void {
       }
 
       try {
-        await spawnSession(config, projectId, project, issueId, opts.open);
+        await spawnSession(config, projectId, issueId, opts.open);
       } catch (err) {
         console.error(chalk.red(`✗ ${err}`));
         process.exit(1);
@@ -89,8 +87,7 @@ export function registerBatchSpawn(program: Command): void {
     .option("--open", "Open sessions in terminal tabs")
     .action(async (projectId: string, issues: string[], opts: { open?: boolean }) => {
       const config = loadConfig();
-      const project = config.projects[projectId];
-      if (!project) {
+      if (!config.projects[projectId]) {
         console.error(
           chalk.red(
             `Unknown project: ${projectId}\nAvailable: ${Object.keys(config.projects).join(", ")}`,
@@ -136,7 +133,7 @@ export function registerBatchSpawn(program: Command): void {
         }
 
         try {
-          const sessionName = await spawnSession(config, projectId, project, issue, opts.open);
+          const sessionName = await spawnSession(config, projectId, issue, opts.open);
           created.push({ session: sessionName, issue });
           spawnedIssues.add(issue.toLowerCase());
         } catch (err) {
