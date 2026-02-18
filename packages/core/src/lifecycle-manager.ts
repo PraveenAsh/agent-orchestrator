@@ -566,6 +566,12 @@ export function createLifecycleManager(deps: LifecycleManagerDeps): LifecycleMan
     const reactionKey = "bugbot-comments";
     const reactionConfig = getEffectiveReactionConfig(session, reactionKey);
     if (reactionConfig && reactionConfig.action && reactionConfig.auto !== false) {
+      // Guard against re-escalation even when fingerprint changes (e.g. state transitions
+      // clear the fingerprint so re-detected identical comments look "new"). Without this,
+      // every state transition followed by the same bot comments bypasses the escalation
+      // guard that the "same fingerprint" retrigger path correctly enforces (line 539).
+      const tracker = reactionTrackers.get(`${session.id}:${reactionKey}`);
+      if (tracker?.escalated) return;
       await executeReaction(session.id, session.projectId, reactionKey, reactionConfig);
     } else if (!reactionConfig || reactionConfig.action === "notify") {
       // No configured reaction or notify-only: surface to human

@@ -1359,6 +1359,84 @@ describe("automated comment detection (bugbot)", () => {
       vi.useRealTimers();
     }
   });
+
+  it("does not re-escalate bugbot-comments when fingerprint changes after escalation", async () => {
+    // Regression: state transitions clear the fingerprint, so re-detected identical
+    // comments look "new" and bypass the escalation guard. This test ensures the
+    // new/changed fingerprint path also respects tracker.escalated.
+    const botComment = {
+      id: "comment-1",
+      botName: "reviewdog",
+      body: "Error: unused import",
+      severity: "error" as const,
+      createdAt: new Date(),
+      url: "https://github.com/org/repo/pull/42#comment-1",
+    };
+
+    const mockNotifier: Notifier = {
+      name: "mock-notifier",
+      notify: vi.fn().mockResolvedValue(undefined),
+    };
+
+    config.reactions = {
+      "bugbot-comments": {
+        auto: true,
+        action: "send-to-agent",
+        message: "Fix bot comments",
+        retries: 0, // escalate on first attempt
+      },
+    };
+
+    const getCISummary = vi.fn().mockResolvedValue("passing");
+    const mockSCM: SCM = {
+      ...makeSCMWithAutomatedComments([botComment]),
+      getCISummary,
+    };
+
+    const registryWithSCM: PluginRegistry = {
+      ...mockRegistry,
+      get: vi.fn().mockImplementation((slot: string) => {
+        if (slot === "runtime") return mockRuntime;
+        if (slot === "agent") return mockAgent;
+        if (slot === "scm") return mockSCM;
+        if (slot === "notifier") return mockNotifier;
+        return null;
+      }),
+    };
+
+    const session = makeSession({ status: "pr_open", pr: makePR() });
+    vi.mocked(mockSessionManager.get).mockResolvedValue(session);
+
+    writeMetadata(sessionsDir, "app-1", {
+      worktree: "/tmp",
+      branch: "main",
+      status: "pr_open",
+      project: "my-app",
+    });
+
+    const lm = createLifecycleManager({
+      config,
+      registry: registryWithSCM,
+      sessionManager: mockSessionManager,
+    });
+
+    // Check 1: pr_open sets initial state
+    await lm.check("app-1");
+    // Check 2: automated comments appear → retries:0 → escalates (1 notification)
+    await lm.check("app-1");
+    expect(mockNotifier.notify).toHaveBeenCalledTimes(1);
+
+    // State transition clears the fingerprint — same bot comment now looks "new"
+    getCISummary.mockResolvedValueOnce("failing"); // pr_open → ci_failed
+    await lm.check("app-1"); // fingerprint cleared by transition
+    getCISummary.mockResolvedValue("passing");
+    await lm.check("app-1"); // back to pr_open
+
+    // Check: fingerprint was cleared, comment still present → looks like "new" comment
+    // but tracker.escalated is true → should NOT re-escalate
+    await lm.check("app-1");
+    expect(mockNotifier.notify).toHaveBeenCalledTimes(1); // still 1, no re-escalation
+  });
 });
 
 describe("persistent retrigger (retriggerAfter)", () => {
