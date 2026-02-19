@@ -32,6 +32,9 @@ export function resolveProject(
 
 /** Convert a core Session to a DashboardSession (without PR/issue enrichment). */
 export function sessionToDashboard(session: Session): DashboardSession {
+  const agentSummary = session.agentInfo?.summary;
+  const summary = agentSummary ?? session.metadata["summary"] ?? null;
+
   return {
     id: session.id,
     projectId: session.projectId,
@@ -42,7 +45,10 @@ export function sessionToDashboard(session: Session): DashboardSession {
     issueUrl: session.issueId, // issueId is actually the full URL
     issueLabel: null, // Will be enriched by enrichSessionIssue()
     issueTitle: null, // Will be enriched by enrichSessionIssueTitle()
-    summary: session.agentInfo?.summary ?? session.metadata["summary"] ?? null,
+    summary,
+    summaryIsFallback: agentSummary
+      ? (session.agentInfo?.summaryIsFallback ?? false)
+      : false,
     createdAt: session.createdAt.toISOString(),
     lastActivityAt: session.lastActivityAt.toISOString(),
     pr: session.pr ? basicPRToDashboard(session.pr) : null,
@@ -258,6 +264,7 @@ export async function enrichSessionAgentSummary(
     const info = await agent.getSessionInfo(coreSession);
     if (info?.summary) {
       dashboard.summary = info.summary;
+      dashboard.summaryIsFallback = info.summaryIsFallback ?? false;
     }
   } catch {
     // Can't read agent session info — keep summary null

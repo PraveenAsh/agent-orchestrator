@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { Session, PRInfo, SCM } from "@composio/ao-core";
-import { sessionToDashboard, enrichSessionPR } from "../serialize";
+import type { Session, PRInfo, SCM, Agent } from "@composio/ao-core";
+import { sessionToDashboard, enrichSessionPR, enrichSessionAgentSummary } from "../serialize";
 import { prCache, prCacheKey } from "../cache";
 import type { DashboardSession } from "../types";
 
@@ -109,19 +109,49 @@ describe("sessionToDashboard", () => {
     expect(dashboard.lastActivityAt).toBe("2025-01-01T01:00:00.000Z");
   });
 
-  it("should use agentInfo summary if available", () => {
+  it("should use agentInfo summary with summaryIsFallback false", () => {
     const coreSession = createCoreSession({
       agentInfo: {
         summary: "Working on feature X",
+        summaryIsFallback: false,
         agentSessionId: "abc123",
       },
     });
     const dashboard = sessionToDashboard(coreSession);
 
     expect(dashboard.summary).toBe("Working on feature X");
+    expect(dashboard.summaryIsFallback).toBe(false);
   });
 
-  it("should fall back to metadata summary if agentInfo is null", () => {
+  it("should propagate summaryIsFallback true from agentInfo", () => {
+    const coreSession = createCoreSession({
+      agentInfo: {
+        summary: "You are working on issue #42...",
+        summaryIsFallback: true,
+        agentSessionId: "abc123",
+      },
+    });
+    const dashboard = sessionToDashboard(coreSession);
+
+    expect(dashboard.summary).toBe("You are working on issue #42...");
+    expect(dashboard.summaryIsFallback).toBe(true);
+  });
+
+  it("should default summaryIsFallback to false when agentInfo omits it", () => {
+    const coreSession = createCoreSession({
+      agentInfo: {
+        summary: "Working on feature X",
+        agentSessionId: "abc123",
+        // summaryIsFallback intentionally omitted (older plugin)
+      },
+    });
+    const dashboard = sessionToDashboard(coreSession);
+
+    expect(dashboard.summary).toBe("Working on feature X");
+    expect(dashboard.summaryIsFallback).toBe(false);
+  });
+
+  it("should set summaryIsFallback false for metadata summary", () => {
     const coreSession = createCoreSession({
       agentInfo: null,
       metadata: { summary: "Metadata summary" },
@@ -129,6 +159,18 @@ describe("sessionToDashboard", () => {
     const dashboard = sessionToDashboard(coreSession);
 
     expect(dashboard.summary).toBe("Metadata summary");
+    expect(dashboard.summaryIsFallback).toBe(false);
+  });
+
+  it("should set summaryIsFallback false when no summary exists", () => {
+    const coreSession = createCoreSession({
+      agentInfo: null,
+      metadata: {},
+    });
+    const dashboard = sessionToDashboard(coreSession);
+
+    expect(dashboard.summary).toBeNull();
+    expect(dashboard.summaryIsFallback).toBe(false);
   });
 
   it("should convert PRInfo to DashboardPR with defaults", () => {
@@ -288,6 +330,7 @@ describe("enrichSessionPR", () => {
       issueLabel: null,
       issueTitle: null,
       summary: null,
+      summaryIsFallback: false,
       createdAt: new Date().toISOString(),
       lastActivityAt: new Date().toISOString(),
       pr: null,
@@ -317,6 +360,137 @@ describe("enrichSessionPR", () => {
     // Should fall back to getPRState
     expect(scm.getPRState).toHaveBeenCalled();
     expect(dashboard.pr?.state).toBe("open");
+  });
+});
+
+describe("enrichSessionAgentSummary", () => {
+  function createMockAgent(
+    info: Partial<Awaited<ReturnType<Agent["getSessionInfo"]>>> | null = null,
+  ): Agent {
+    return {
+      name: "mock",
+      processName: "mock",
+      getLaunchCommand: vi.fn().mockReturnValue("mock"),
+      getEnvironment: vi.fn().mockReturnValue({}),
+      detectActivity: vi.fn().mockReturnValue("active"),
+      getActivityState: vi.fn().mockResolvedValue({ activity: "active" }),
+      getSessionInfo: vi.fn().mockResolvedValue(
+        info
+          ? {
+              summary: info.summary ?? null,
+              summaryIsFallback: info.summaryIsFallback,
+              agentSessionId: info.agentSessionId ?? null,
+            }
+          : null,
+      ),
+      sendMessage: vi.fn(),
+    };
+  }
+
+  it("should set summary and summaryIsFallback false from agent", async () => {
+    const core = createCoreSession();
+    const dashboard = sessionToDashboard(core);
+    expect(dashboard.summary).toBeNull();
+
+    const agent = createMockAgent({
+      summary: "Working on feature X",
+      summaryIsFallback: false,
+    });
+
+    await enrichSessionAgentSummary(dashboard, core, agent);
+
+    expect(dashboard.summary).toBe("Working on feature X");
+    expect(dashboard.summaryIsFallback).toBe(false);
+  });
+
+  it("should propagate summaryIsFallback true from agent", async () => {
+    const core = createCoreSession();
+    const dashboard = sessionToDashboard(core);
+
+    const agent = createMockAgent({
+      summary: "You are working on issue #42...",
+      summaryIsFallback: true,
+    });
+
+    await enrichSessionAgentSummary(dashboard, core, agent);
+
+    expect(dashboard.summary).toBe("You are working on issue #42...");
+    expect(dashboard.summaryIsFallback).toBe(true);
+  });
+
+  it("should default summaryIsFallback to false when agent omits it", async () => {
+    const core = createCoreSession();
+    const dashboard = sessionToDashboard(core);
+
+    const agent = createMockAgent({
+      summary: "Working on feature X",
+      // summaryIsFallback intentionally omitted (backwards compat)
+    });
+
+    await enrichSessionAgentSummary(dashboard, core, agent);
+
+    expect(dashboard.summary).toBe("Working on feature X");
+    expect(dashboard.summaryIsFallback).toBe(false);
+  });
+
+  it("should skip enrichment when dashboard already has a summary", async () => {
+    const core = createCoreSession({
+      agentInfo: {
+        summary: "Existing summary",
+        summaryIsFallback: false,
+        agentSessionId: "abc",
+      },
+    });
+    const dashboard = sessionToDashboard(core);
+    expect(dashboard.summary).toBe("Existing summary");
+
+    const agent = createMockAgent({
+      summary: "New summary from agent",
+      summaryIsFallback: false,
+    });
+
+    await enrichSessionAgentSummary(dashboard, core, agent);
+
+    // Should keep original summary, not overwrite
+    expect(dashboard.summary).toBe("Existing summary");
+    expect(agent.getSessionInfo).not.toHaveBeenCalled();
+  });
+
+  it("should handle agent.getSessionInfo throwing", async () => {
+    const core = createCoreSession();
+    const dashboard = sessionToDashboard(core);
+
+    const agent: Agent = {
+      ...createMockAgent(),
+      getSessionInfo: vi.fn().mockRejectedValue(new Error("JSONL corrupted")),
+    };
+
+    await enrichSessionAgentSummary(dashboard, core, agent);
+
+    expect(dashboard.summary).toBeNull();
+    expect(dashboard.summaryIsFallback).toBe(false);
+  });
+
+  it("should not update when agent returns null info", async () => {
+    const core = createCoreSession();
+    const dashboard = sessionToDashboard(core);
+    const agent = createMockAgent(null);
+
+    await enrichSessionAgentSummary(dashboard, core, agent);
+
+    expect(dashboard.summary).toBeNull();
+    expect(dashboard.summaryIsFallback).toBe(false);
+  });
+
+  it("should not update when agent returns info with null summary", async () => {
+    const core = createCoreSession();
+    const dashboard = sessionToDashboard(core);
+    const agent = createMockAgent({ summary: null });
+
+    await enrichSessionAgentSummary(dashboard, core, agent);
+
+    expect(dashboard.summary).toBeNull();
+    expect(dashboard.summaryIsFallback).toBe(false);
   });
 });
 

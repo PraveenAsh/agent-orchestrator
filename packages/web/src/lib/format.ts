@@ -3,7 +3,7 @@
  * No side effects, no external dependencies.
  */
 
-import type { DashboardSession } from "./types";
+import type { DashboardSession } from "./types.js";
 
 /**
  * Humanize a git branch name into a readable title.
@@ -25,33 +25,13 @@ export function humanizeBranch(branch: string): string {
 }
 
 /**
- * Detect if a summary string looks like a truncated spawn prompt rather
- * than a real agent-generated summary.
- *
- * When Claude Code hasn't generated a "summary" entry in its JSONL yet,
- * extractSummary() falls back to the first user message truncated to 120
- * chars. That message is typically the spawn prompt (built by
- * prompt-builder.ts + tracker.generatePrompt()), which makes a poor title.
- */
-export function looksLikePromptExcerpt(summary: string): boolean {
-  return (
-    summary.startsWith("You are working on") ||
-    summary.startsWith("You are an AI coding agent") ||
-    summary.startsWith("Work on ") ||
-    summary.includes("Issue URL:") ||
-    summary.includes("Please implement the changes") ||
-    summary.includes("## Session Lifecycle")
-  );
-}
-
-/**
  * Compute the best display title for a session card.
  *
  * Fallback chain (ordered by signal quality):
  *   1. PR title         — human-visible deliverable name
- *   2. Quality summary   — real agent-generated summary (not a prompt excerpt)
+ *   2. Quality summary   — real agent-generated summary (not a fallback)
  *   3. Issue title       — human-written task description
- *   4. Any summary       — even a prompt excerpt is better than nothing
+ *   4. Any summary       — even a fallback excerpt is better than nothing
  *   5. Humanized branch  — last resort with semantic content
  *   6. Status text       — absolute fallback
  */
@@ -59,15 +39,15 @@ export function getSessionTitle(session: DashboardSession): string {
   // 1. PR title — always best
   if (session.pr?.title) return session.pr.title;
 
-  // 2. Quality summary — real agent summary, not a prompt excerpt
-  if (session.summary && !looksLikePromptExcerpt(session.summary)) {
+  // 2. Quality summary — skip fallback summaries (truncated spawn prompts)
+  if (session.summary && !session.summaryIsFallback) {
     return session.summary;
   }
 
   // 3. Issue title — human-written task description
   if (session.issueTitle) return session.issueTitle;
 
-  // 4. Any summary — even prompt excerpts beat branch names
+  // 4. Any summary — even fallback excerpts beat branch names
   if (session.summary) return session.summary;
 
   // 5. Humanized branch

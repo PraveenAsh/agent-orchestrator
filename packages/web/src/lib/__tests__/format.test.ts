@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { humanizeBranch, looksLikePromptExcerpt, getSessionTitle } from "../format";
+import { humanizeBranch, getSessionTitle } from "../format";
 import type { DashboardSession } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -22,6 +22,7 @@ function makeSession(overrides?: Partial<DashboardSession>): DashboardSession {
     issueLabel: null,
     issueTitle: null,
     summary: null,
+    summaryIsFallback: false,
     createdAt: new Date().toISOString(),
     lastActivityAt: new Date().toISOString(),
     pr: null,
@@ -82,69 +83,6 @@ describe("humanizeBranch", () => {
 });
 
 // ---------------------------------------------------------------------------
-// looksLikePromptExcerpt
-// ---------------------------------------------------------------------------
-
-describe("looksLikePromptExcerpt", () => {
-  it("detects GitHub spawn prompts", () => {
-    expect(
-      looksLikePromptExcerpt(
-        "You are working on GitHub issue #42: Add authentication to API Issue URL: https://github.com/owner/repo/issues/42 Labe...",
-      ),
-    ).toBe(true);
-  });
-
-  it("detects Linear spawn prompts", () => {
-    expect(
-      looksLikePromptExcerpt(
-        "You are working on Linear ticket INT-1327: Refactor session manager Issue URL: https://linear.app/composio/issue/INT-1...",
-      ),
-    ).toBe(true);
-  });
-
-  it("detects base agent prompt fallback", () => {
-    expect(
-      looksLikePromptExcerpt(
-        'You are an AI coding agent managed by the Agent Orchestrator (ao). ## Session Lifecycle - You are running inside a mana...',
-      ),
-    ).toBe(true);
-  });
-
-  it("detects prompts containing Issue URL", () => {
-    expect(
-      looksLikePromptExcerpt("Some context Issue URL: https://github.com/owner/repo/issues/1"),
-    ).toBe(true);
-  });
-
-  it("detects prompts containing 'Please implement the changes'", () => {
-    expect(
-      looksLikePromptExcerpt("...details here. Please implement the changes described in this issue."),
-    ).toBe(true);
-  });
-
-  it("detects prompts containing lifecycle instructions", () => {
-    expect(
-      looksLikePromptExcerpt("Some text ## Session Lifecycle more text"),
-    ).toBe(true);
-  });
-
-  it("detects 'Work on ' prefixed prompts", () => {
-    expect(looksLikePromptExcerpt("Work on issue #42: add auth")).toBe(true);
-  });
-
-  it("does NOT flag real agent summaries", () => {
-    expect(looksLikePromptExcerpt("Implementing OAuth2 authentication with JWT tokens")).toBe(
-      false,
-    );
-    expect(
-      looksLikePromptExcerpt("Refactored session manager to use plugin architecture"),
-    ).toBe(false);
-    expect(looksLikePromptExcerpt("Fixed null pointer in dashboard rendering")).toBe(false);
-    expect(looksLikePromptExcerpt("Adding unit tests for the format module")).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // getSessionTitle — full fallback chain
 // ---------------------------------------------------------------------------
 
@@ -183,9 +121,10 @@ describe("getSessionTitle", () => {
     expect(getSessionTitle(session)).toBe("feat: add auth");
   });
 
-  it("returns quality summary over issue title", () => {
+  it("returns agent summary over issue title", () => {
     const session = makeSession({
       summary: "Implementing OAuth2 authentication with JWT tokens",
+      summaryIsFallback: false,
       issueTitle: "Add user authentication",
       branch: "feat/auth",
     });
@@ -194,26 +133,25 @@ describe("getSessionTitle", () => {
     );
   });
 
-  it("skips prompt-excerpt summaries in favor of issue title", () => {
+  it("skips fallback summaries in favor of issue title", () => {
     const session = makeSession({
-      summary:
-        "You are working on GitHub issue #42: Add authentication to API Issue URL: https://github.com/owner/repo/issues/42 Labe...",
+      summary: "You are working on GitHub issue #42: Add authentication to API...",
+      summaryIsFallback: true,
       issueTitle: "Add authentication to API",
       branch: "feat/issue-42",
     });
     expect(getSessionTitle(session)).toBe("Add authentication to API");
   });
 
-  it("uses prompt-excerpt summary when no issue title is available", () => {
+  it("uses fallback summary when no issue title is available", () => {
     const session = makeSession({
-      summary:
-        "You are working on GitHub issue #42: Add authentication to API Issue URL: https://github.com/owner/repo/issues/42 Labe...",
+      summary: "You are working on GitHub issue #42: Add authentication to API...",
+      summaryIsFallback: true,
       issueTitle: null,
       branch: "feat/issue-42",
     });
-    // Prompt excerpt is still better than humanized branch
     expect(getSessionTitle(session)).toBe(
-      "You are working on GitHub issue #42: Add authentication to API Issue URL: https://github.com/owner/repo/issues/42 Labe...",
+      "You are working on GitHub issue #42: Add authentication to API...",
     );
   });
 
@@ -244,23 +182,10 @@ describe("getSessionTitle", () => {
     expect(getSessionTitle(session)).toBe("working");
   });
 
-  it("handles base-prompt-only summary with no other info", () => {
-    const session = makeSession({
-      summary:
-        "You are an AI coding agent managed by the Agent Orchestrator (ao). ## Session Lifecycle - You are running inside a mana...",
-      issueTitle: null,
-      branch: "session/ao-37",
-    });
-    // No issue title available, so falls through to the prompt excerpt (step 4)
-    expect(getSessionTitle(session)).toBe(
-      "You are an AI coding agent managed by the Agent Orchestrator (ao). ## Session Lifecycle - You are running inside a mana...",
-    );
-  });
-
-  it("prefers prompt excerpt over branch when no issue title", () => {
-    // Even a bad summary has more info than a branch name
+  it("prefers fallback summary over branch when no issue title", () => {
     const session = makeSession({
       summary: "You are working on Linear ticket INT-1327: Refactor session manager",
+      summaryIsFallback: true,
       issueTitle: null,
       branch: "feat/INT-1327",
     });
