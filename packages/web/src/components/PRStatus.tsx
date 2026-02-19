@@ -22,7 +22,7 @@ export function PRStatus({ pr }: PRStatusProps) {
         href={pr.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center rounded-full bg-[rgba(88,166,255,0.1)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-accent-blue)] hover:underline"
+        className="text-[11px] font-medium text-[var(--color-accent)] underline-offset-2 hover:underline"
         onClick={(e) => e.stopPropagation()}
       >
         #{pr.number}

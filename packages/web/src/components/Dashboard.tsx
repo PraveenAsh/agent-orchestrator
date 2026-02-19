@@ -20,7 +20,7 @@ interface DashboardProps {
   projectName?: string;
 }
 
-const KANBAN_LEVELS = ["merge", "respond", "review", "pending", "working"] as const;
+const KANBAN_LEVELS = ["working", "pending", "review", "respond", "merge"] as const;
 
 export function Dashboard({ sessions, stats, orchestratorId, projectName }: DashboardProps) {
   const grouped = useMemo(() => {
@@ -114,7 +114,7 @@ export function Dashboard({ sessions, stats, orchestratorId, projectName }: Dash
         <div className="mb-8 flex gap-4 overflow-x-auto pb-2">
           {KANBAN_LEVELS.map((level) =>
             grouped[level].length > 0 ? (
-              <div key={level} className="w-[260px] shrink-0">
+              <div key={level} className="min-w-[200px] flex-1">
                 <AttentionZone
                   level={level}
                   sessions={grouped[level]}

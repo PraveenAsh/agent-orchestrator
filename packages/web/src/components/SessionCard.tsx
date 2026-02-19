@@ -117,7 +117,7 @@ export function SessionCard({ session, onSend, onKill, onMerge, onRestore }: Ses
           <a
             href={`/sessions/${encodeURIComponent(session.id)}`}
             onClick={(e) => e.stopPropagation()}
-            className="rounded border border-[var(--color-border-default)] px-2.5 py-0.5 text-[11px] text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] hover:no-underline"
+            className="rounded border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-2.5 py-0.5 text-[11px] text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] hover:no-underline"
           >
             terminal
           </a>
@@ -146,7 +146,7 @@ export function SessionCard({ session, onSend, onKill, onMerge, onRestore }: Ses
 
       {/* Merge button or alert tags */}
       {(alerts.length > 0 || isReadyToMerge) && (
-        <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3.5">
+        <div className="px-4 pb-3.5 pt-0.5">
           {isReadyToMerge && pr ? (
             <button
               onClick={(e) => { e.stopPropagation(); onMerge?.(pr.number); }}
@@ -158,32 +158,34 @@ export function SessionCard({ session, onSend, onKill, onMerge, onRestore }: Ses
               Merge PR #{pr.number}
             </button>
           ) : (
-            alerts.map((alert) => (
-              <span key={alert.key} className="flex items-center gap-1">
-                <a
-                  href={alert.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium hover:brightness-125 hover:no-underline",
-                    alert.className,
-                  )}
-                >
-                  {alert.count !== undefined && <span className="font-bold">{alert.count}</span>}
-                  {alert.label}
-                </a>
-                {alert.actionLabel && session.activity !== "active" && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleAction(alert.key, alert.actionMessage ?? ""); }}
-                    disabled={sendingAction === alert.key}
-                    className="rounded border border-[rgba(209,134,22,0.25)] px-2 py-0.5 text-[11px] text-[var(--color-accent)] transition-colors hover:bg-[rgba(209,134,22,0.1)] disabled:opacity-50"
+            <div className="flex flex-wrap gap-1">
+              {alerts.map((alert) => (
+                <span key={alert.key} className="inline-flex items-center gap-1">
+                  <a
+                    href={alert.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium hover:brightness-125 hover:no-underline",
+                      alert.className,
+                    )}
                   >
-                    {sendingAction === alert.key ? "sent!" : alert.actionLabel}
-                  </button>
-                )}
-              </span>
-            ))
+                    {alert.count !== undefined && <span className="font-bold">{alert.count}</span>}
+                    {alert.label}
+                  </a>
+                  {alert.actionLabel && session.activity !== "active" && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleAction(alert.key, alert.actionMessage ?? ""); }}
+                      disabled={sendingAction === alert.key}
+                      className="rounded border border-[rgba(209,134,22,0.25)] px-2 py-0.5 text-[11px] text-[var(--color-accent)] transition-colors hover:bg-[rgba(209,134,22,0.1)] disabled:opacity-50"
+                    >
+                      {sendingAction === alert.key ? "sent!" : alert.actionLabel}
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       )}
