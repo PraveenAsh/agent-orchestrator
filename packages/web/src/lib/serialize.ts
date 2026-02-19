@@ -236,7 +236,7 @@ export async function enrichSessionPR(
       unresolvedThreads: dashboard.pr.unresolvedThreads,
       unresolvedComments: dashboard.pr.unresolvedComments,
     };
-    prCache.set(cacheKey, rateLimitedData, 5 * 60_000); // 5 min — don't retry until reset
+    prCache.set(cacheKey, rateLimitedData, 60 * 60_000); // 60 min — GitHub rate limit resets hourly
     return true;
   }
 
