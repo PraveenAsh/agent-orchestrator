@@ -245,8 +245,12 @@ describe.skipIf(!canRun)("agent-claude-code (integration)", () => {
   });
 
   it("getActivityState → returns valid non-exited state while agent is alive", () => {
-    expect(aliveActivityState).toBeDefined();
-    // May be null (no JSONL yet) or a concrete ActivityDetection
+    // Polling must have captured an observation — undefined means the
+    // 30s polling window expired without ever seeing a non-exited state.
+    expect(aliveActivityState).not.toBeUndefined();
+    // May be null (JSONL not created yet) or a concrete ActivityDetection.
+    // The undefined guard is redundant after the assertion above but required
+    // for TypeScript type narrowing.
     if (aliveActivityState !== null && aliveActivityState !== undefined) {
       expect(aliveActivityState.state).not.toBe("exited");
       expect(["active", "ready", "idle", "waiting_input", "blocked"]).toContain(

@@ -149,9 +149,13 @@ describe.skipIf(!canRun)("agent-aider (integration)", () => {
   });
 
   it("getActivityState → returns valid state while agent is running", () => {
-    // Aider checks git commits and chat history mtime for activity detection.
-    // May return null if no chat history exists yet.
-    if (aliveActivityState !== undefined && aliveActivityState !== null) {
+    // Polling must have captured an observation — undefined means the
+    // 30s polling window expired without ever seeing a non-exited state.
+    expect(aliveActivityState).not.toBeUndefined();
+    // May be null if no chat history exists yet and no recent commits.
+    // The undefined guard is redundant after the assertion above but required
+    // for TypeScript type narrowing.
+    if (aliveActivityState !== null && aliveActivityState !== undefined) {
       expect(aliveActivityState.state).not.toBe("exited");
       expect(["active", "ready", "idle", "waiting_input", "blocked"]).toContain(
         aliveActivityState.state,

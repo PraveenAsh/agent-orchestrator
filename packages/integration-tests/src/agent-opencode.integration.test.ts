@@ -140,11 +140,12 @@ describe.skipIf(!canRun)("agent-opencode (integration)", () => {
   });
 
   it("getActivityState → returns null while agent is running (no per-session tracking)", () => {
+    // Polling must have captured an observation — undefined means the
+    // 15s polling window expired without ever seeing a non-exited state.
+    expect(aliveActivityState).not.toBeUndefined();
     // OpenCode uses a global SQLite database shared by all sessions,
     // so getActivityState honestly returns null instead of guessing.
-    if (aliveActivityState !== undefined) {
-      expect(aliveActivityState).toBeNull();
-    }
+    expect(aliveActivityState).toBeNull();
   });
 
   it("isProcessRunning → false after agent exits", () => {

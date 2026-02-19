@@ -116,11 +116,12 @@ describe.skipIf(!canRun)("agent-codex (integration)", () => {
   });
 
   it("getActivityState → returns null while agent is running (no per-session tracking)", () => {
+    // Polling must have captured an observation — undefined means the
+    // 15s polling window expired without ever seeing a non-exited state.
+    expect(aliveActivityState).not.toBeUndefined();
     // Codex uses global rollout file storage without per-session scoping,
     // so getActivityState honestly returns null instead of guessing.
-    if (aliveActivityState !== undefined) {
-      expect(aliveActivityState).toBeNull();
-    }
+    expect(aliveActivityState).toBeNull();
   });
 
   it("isProcessRunning → false after agent exits", () => {
