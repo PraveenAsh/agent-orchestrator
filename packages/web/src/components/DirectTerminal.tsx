@@ -243,7 +243,7 @@ export function DirectTerminal({
       mounted = false;
       cleanup?.();
     };
-  }, [sessionId]);
+  }, [sessionId, variant]);
 
   // Re-fit terminal when fullscreen changes
   useEffect(() => {

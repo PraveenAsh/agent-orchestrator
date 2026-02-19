@@ -53,7 +53,7 @@ export function SessionCard({ session, onSend, onKill, onMerge, onRestore }: Ses
 
   const rateLimited = pr ? isPRRateLimited(pr) : false;
   const alerts = getAlerts(session);
-  const isReadyToMerge = pr?.mergeability.mergeable && pr.state === "open";
+  const isReadyToMerge = !rateLimited && pr?.mergeability.mergeable && pr.state === "open";
   const isTerminal =
     TERMINAL_STATUSES.has(session.status) ||
     (session.activity !== null && TERMINAL_ACTIVITIES.has(session.activity));
@@ -112,7 +112,12 @@ export function SessionCard({ session, onSend, onKill, onMerge, onRestore }: Ses
 
       {/* Title — its own row, bigger, can wrap */}
       <div className="px-4 pb-3">
-        <p className="text-[14px] font-semibold leading-snug text-[var(--color-text-primary)] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
+        <p className={cn(
+          "leading-snug [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden",
+          level === "working"
+            ? "text-[13px] font-medium text-[var(--color-text-secondary)]"
+            : "text-[14px] font-semibold text-[var(--color-text-primary)]"
+        )}>
           {title}
         </p>
       </div>

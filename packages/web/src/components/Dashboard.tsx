@@ -224,12 +224,14 @@ function StatusLine({ stats }: { stats: DashboardStats }) {
     return <span className="text-[13px] text-[var(--color-text-muted)]">no sessions</span>;
   }
 
-  const parts: Array<{ value: number; label: string; alert?: boolean }> = [
+  const parts: Array<{ value: number; label: string; color?: string }> = [
     { value: stats.totalSessions, label: "sessions" },
-    ...(stats.workingSessions > 0 ? [{ value: stats.workingSessions, label: "active" }] : []),
+    ...(stats.workingSessions > 0
+      ? [{ value: stats.workingSessions, label: "active", color: "var(--color-status-working)" }]
+      : []),
     ...(stats.openPRs > 0 ? [{ value: stats.openPRs, label: "PRs" }] : []),
     ...(stats.needsReview > 0
-      ? [{ value: stats.needsReview, label: "need review", alert: true }]
+      ? [{ value: stats.needsReview, label: "need review", color: "var(--color-status-attention)" }]
       : []),
   ];
 
@@ -242,11 +244,7 @@ function StatusLine({ stats }: { stats: DashboardStats }) {
           )}
           <span
             className="text-[20px] font-bold tabular-nums tracking-tight"
-            style={{
-              color: p.alert
-                ? "var(--color-status-attention)"
-                : "var(--color-text-primary)",
-            }}
+            style={{ color: p.color ?? "var(--color-text-primary)" }}
           >
             {p.value}
           </span>
