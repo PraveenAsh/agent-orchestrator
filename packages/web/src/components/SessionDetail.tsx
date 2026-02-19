@@ -7,6 +7,7 @@ import { CI_STATUS } from "@composio/ao-core/types";
 import { cn } from "@/lib/cn";
 import { CICheckList } from "./CIBadge";
 import { DirectTerminal } from "./DirectTerminal";
+import { ActivityDot } from "./ActivityDot";
 
 interface OrchestratorZones {
   merge: number;
@@ -98,27 +99,6 @@ async function askAgentToFix(
   }
 }
 
-// ── Activity dot ─────────────────────────────────────────────────────
-
-function ActivityDot({ activity, size = 8 }: { activity: string | null; size?: number }) {
-  const colorMap: Record<string, string> = {
-    active:        "var(--color-status-working)",
-    ready:         "var(--color-status-ready)",
-    idle:          "var(--color-status-idle)",
-    waiting_input: "var(--color-status-attention)",
-    blocked:       "var(--color-status-error)",
-    exited:        "var(--color-status-done)",
-  };
-  const color = (activity && colorMap[activity]) ?? "var(--color-text-tertiary)";
-  const isPulsing = activity === "active";
-  return (
-    <div
-      className={cn("shrink-0 rounded-full", isPulsing && "animate-[activity-pulse_2s_ease-in-out_infinite]")}
-      style={{ width: size, height: size, background: color }}
-    />
-  );
-}
-
 // ── Orchestrator status strip ─────────────────────────────────────────
 
 function OrchestratorStatusStrip({
@@ -145,6 +125,7 @@ function OrchestratorStatusStrip({
   const counts: Array<{ value: number; label: string; color: string }> = [
     { value: zones.merge,   label: "merge-ready",  color: "var(--color-status-ready)" },
     { value: zones.respond, label: "responding",   color: "var(--color-status-error)" },
+    { value: zones.review,  label: "review",       color: "var(--color-accent-orange)" },
     { value: zones.working, label: "working",      color: "var(--color-status-working)" },
     { value: zones.pending, label: "pending",      color: "var(--color-status-attention)" },
     { value: zones.done,    label: "done",         color: "var(--color-text-tertiary)" },
@@ -245,7 +226,7 @@ export function SessionDetail({ session, isOrchestrator = false, orchestratorZon
                 background: `color-mix(in srgb, ${activity.color} 12%, transparent)`,
               }}
             >
-              <ActivityDot activity={session.activity} size={6} />
+              <ActivityDot activity={session.activity} dotOnly size={6} />
               <span className="text-[11px] font-semibold" style={{ color: activity.color }}>
                 {activity.label}
               </span>

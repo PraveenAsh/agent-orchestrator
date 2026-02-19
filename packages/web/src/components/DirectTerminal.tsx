@@ -92,7 +92,7 @@ export function DirectTerminal({
         const terminal = new Terminal({
           cursorBlink: true,
           fontSize: 13,
-          fontFamily: '"JetBrains Mono", "SF Mono", Menlo, Monaco, "Courier New", monospace',
+          fontFamily: '"IBM Plex Mono", "SF Mono", Menlo, Monaco, "Courier New", monospace',
           theme: {
             background: "#0a0a0f",
             foreground: "#d4d4d8",

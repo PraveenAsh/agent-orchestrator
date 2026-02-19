@@ -105,10 +105,11 @@ export function Dashboard({ sessions, stats, orchestratorId, projectName }: Dash
         {orchestratorId && (
           <a
             href={`/sessions/${encodeURIComponent(orchestratorId)}`}
-            className="flex items-center gap-1.5 rounded-[6px] border border-[var(--color-border-default)] px-4 py-2 text-[12px] font-medium text-[var(--color-text-secondary)] transition-all duration-150 hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] hover:no-underline"
+            className="orchestrator-btn flex items-center gap-2 rounded-[7px] px-4 py-2 text-[12px] font-semibold hover:no-underline"
           >
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] opacity-80" />
             orchestrator
-            <svg className="h-3 w-3 opacity-60" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="h-3 w-3 opacity-70" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
             </svg>
           </a>
