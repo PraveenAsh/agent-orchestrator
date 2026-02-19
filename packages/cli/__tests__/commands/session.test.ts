@@ -499,7 +499,7 @@ describe("session table", () => {
     expect(output).toContain("app-1");
     expect(output).toContain("working");
     expect(output).toContain("active");
-    expect(output).toContain("http://localhost:3000/sessions/app-1");
+    expect(output).toContain("/sessions/app-1");
   });
 
   it("shows PR, CI, and bugbot data from SCM", async () => {
@@ -575,7 +575,7 @@ describe("session table", () => {
     expect(parsed[0].activity).toBe("idle");
     expect(parsed[0].ci).toBe("-");
     expect(parsed[0].bugbot).toBe(0);
-    expect(parsed[0].sessionUrl).toBe("http://localhost:3000/sessions/app-1");
+    expect(parsed[0].sessionUrl).toContain("/sessions/app-1");
     expect(parsed[0].prUrl).toBe("");
   });
 

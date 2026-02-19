@@ -615,51 +615,6 @@ describe("status command", () => {
     expect(parsed[0].activity).toBeNull();
   });
 
-  it("shows null activity when session activity is null", async () => {
-    writeFileSync(
-      join(sessionsDir, "app-1"),
-      "worktree=/tmp/wt\nbranch=feat/err\nstatus=working\n",
-    );
-
-    mockTmux.mockImplementation(async (...args: string[]) => {
-      if (args[0] === "list-sessions") return "app-1";
-      if (args[0] === "display-message") return String(Math.floor(Date.now() / 1000));
-      return null;
-    });
-    mockGit.mockResolvedValue("feat/err");
-
-    // Session has activity: null (default from buildSessionsFromDir)
-    await program.parseAsync(["node", "test", "status", "--json"]);
-
-    const jsonCalls = consoleSpy.mock.calls.map((c) => c[0]).join("");
-    const parsed = JSON.parse(jsonCalls);
-    expect(parsed[0].activity).toBeNull();
-  });
-
-  it("shows null activity when session activity is explicitly null", async () => {
-    writeFileSync(
-      join(sessionsDir, "app-1"),
-      "worktree=/tmp/wt\nbranch=feat/null\nstatus=working\n",
-    );
-
-    mockSessionManager.list.mockImplementation(async () => {
-      return buildSessionsFromDir(sessionsDirRef.current, "my-app", null);
-    });
-
-    mockTmux.mockImplementation(async (...args: string[]) => {
-      if (args[0] === "list-sessions") return "app-1";
-      if (args[0] === "display-message") return String(Math.floor(Date.now() / 1000));
-      return null;
-    });
-    mockGit.mockResolvedValue("feat/null");
-
-    await program.parseAsync(["node", "test", "status", "--json"]);
-
-    const jsonCalls = consoleSpy.mock.calls.map((c) => c[0]).join("");
-    const parsed = JSON.parse(jsonCalls);
-    expect(parsed[0].activity).toBeNull();
-  });
-
   it("shows exited activity from session manager", async () => {
     writeFileSync(
       join(sessionsDir, "app-1"),

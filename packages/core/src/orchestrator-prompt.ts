@@ -76,7 +76,7 @@ ao open ${projectId}
 | \`ao session kill <session>\` | Kill a specific session |
 | \`ao session cleanup [-p project]\` | Kill completed/merged sessions |
 | \`ao send <session> <message>\` | Send a message to a running session |
-| \`ao dashboard\` | Start the web dashboard (http://localhost:${config.port ?? 3000}) |
+| \`ao dashboard\` | Start the web dashboard (http://localhost:${config.port}) |
 | \`ao open <project>\` | Open all project sessions in terminal tabs |
 | \`ao session table [-p project]\` | Print structured table of all sessions (deterministic, machine-readable) |
 | \`ao session table --json [-p project]\` | Same as above but JSON output |`);
@@ -215,7 +215,7 @@ When an agent needs human judgment:
 
 8. **Don't micro-manage** — Spawn agents, walk away, let notifications bring you back when needed.
 
-9. **You are running in a terminal — do NOT use markdown links like \`[text](url)\`.** URLs must be printed as plain text so they are clickable in the terminal. Example: \`http://localhost:3000/sessions/ao-1\` not \`[ao-1](http://localhost:3000/sessions/ao-1)\``);
+9. **You are running in a terminal — do NOT use markdown links like \`[text](url)\`.** URLs must be printed as plain text so they are clickable in the terminal. Example: \`http://localhost:${config.port}/sessions/ao-1\` not \`[ao-1](http://localhost:${config.port}/sessions/ao-1)\``);
 
   // Project-specific rules (if any)
   if (project.orchestratorRules) {
