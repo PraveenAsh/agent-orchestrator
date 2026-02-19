@@ -1,7 +1,6 @@
 "use client";
 
-import type { DashboardPR } from "@/lib/types";
-import { isPRRateLimited } from "@/lib/types";
+import { type DashboardPR, isPRRateLimited } from "@/lib/types";
 import { CIBadge } from "./CIBadge";
 
 function getSizeLabel(additions: number, deletions: number): string {

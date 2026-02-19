@@ -28,7 +28,7 @@ interface ActivityDotProps {
 }
 
 export function ActivityDot({ activity, dotOnly = false, size = 6 }: ActivityDotProps) {
-  const c = (activity != null && activityConfig[activity]) || {
+  const c = (activity !== null && activityConfig[activity]) || {
     label: activity ?? "unknown",
     ...fallbackConfig,
   };
