@@ -257,29 +257,39 @@ interface JsonlLine {
 /**
  * Parse only the last `maxBytes` of a JSONL file.
  * Summaries and recent activity are always near the end, so reading the whole
- * file (which can be 100MB+) is wasteful. The first line is skipped since it
- * may be truncated at the read boundary.
+ * file (which can be 100MB+) is wasteful. For files smaller than maxBytes,
+ * readFile is used directly. For large files, only the tail is read via a
+ * file handle to avoid loading the entire file into memory.
  */
 async function parseJsonlFileTail(filePath: string, maxBytes = 131_072): Promise<JsonlLine[]> {
   let content: string;
+  let offset = 0;
   try {
-    const handle = await open(filePath, "r");
-    try {
-      const { size } = await handle.stat();
-      const offset = Math.max(0, size - maxBytes);
-      const length = size - offset;
-      const buffer = Buffer.allocUnsafe(length);
-      await handle.read(buffer, 0, length, offset);
-      content = buffer.toString("utf-8");
-    } finally {
-      await handle.close();
+    const { size = 0 } = await stat(filePath);
+    offset = Math.max(0, size - maxBytes);
+    if (offset === 0) {
+      // Small file (or unknown size) — read it whole
+      content = await readFile(filePath, "utf-8");
+    } else {
+      // Large file — read only the tail via a file handle
+      const handle = await open(filePath, "r");
+      try {
+        const length = size - offset;
+        const buffer = Buffer.allocUnsafe(length);
+        await handle.read(buffer, 0, length, offset);
+        content = buffer.toString("utf-8");
+      } finally {
+        await handle.close();
+      }
     }
   } catch {
     return [];
   }
-  // Skip potentially truncated first line
+  // Skip potentially truncated first line only when we started mid-file.
+  // If offset === 0 we read from the start so the first line is complete.
   const firstNewline = content.indexOf("\n");
-  const safeContent = firstNewline >= 0 ? content.slice(firstNewline + 1) : content;
+  const safeContent =
+    offset > 0 && firstNewline >= 0 ? content.slice(firstNewline + 1) : content;
   const lines: JsonlLine[] = [];
   for (const line of safeContent.split("\n")) {
     const trimmed = line.trim();
